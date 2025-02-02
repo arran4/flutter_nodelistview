@@ -89,16 +89,20 @@ class _NodeListViewState extends State<NodeListView> {
     double halfHeight = size.height / 2;
     double top = centerOfSelected - halfHeight;
     double bottom = centerOfSelected + halfHeight;
-    Positioned selectedWidget = Positioned(
+    Positioned positioned = Positioned(
       top: top,
       left: 0,
       right: constraints.minWidth,
-      // bottom: bottom,
       height: size.height,
       key: selected.key,
-      child: child,
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.red),
+        ),
+        child: child,
+      ),
     );
-    tailResult.add(selectedWidget);
+    tailResult.add(positioned);
     var last = selected;
     for (int n = 1; top > 0; n++) {
       NodeBase? node;
@@ -113,7 +117,7 @@ class _NodeListViewState extends State<NodeListView> {
       child = widget.itemBuilder(context, node);
       size = node.size();
       top -= size.height;
-      Positioned previousWidget = Positioned(
+      positioned = Positioned(
         top: top,
         left: 0,
         right: constraints.minWidth,
@@ -121,7 +125,7 @@ class _NodeListViewState extends State<NodeListView> {
         key: node.key,
         child: child,
       );
-      headResult.add(previousWidget);
+      headResult.add(positioned);
       last = node;
     }
     last = selected;
@@ -136,7 +140,7 @@ class _NodeListViewState extends State<NodeListView> {
       }
       child = widget.itemBuilder(context, node);
       size = node.size();
-      Positioned nextWidget = Positioned(
+      positioned = Positioned(
         top: bottom,
         left: 0,
         right: constraints.minWidth,
@@ -145,7 +149,7 @@ class _NodeListViewState extends State<NodeListView> {
         child: child,
       );
       bottom += size.height;
-      headResult.add(nextWidget);
+      headResult.add(positioned);
       last = node;
     }
     return headResult.reversed.toList() + tailResult;
