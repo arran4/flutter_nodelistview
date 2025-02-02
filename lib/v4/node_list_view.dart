@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import './node_base.dart';
 
-typedef NodeWidgetBuilder = Widget Function(BuildContext context, NodeBase node);
+typedef NodeWidgetBuilder = Widget Function(BuildContext context, NodeBase node, { bool selected });
 
 class NodeListView extends StatefulWidget {
   final NodeBase? currentNode;
@@ -84,7 +84,7 @@ class _NodeListViewState extends State<NodeListView> {
     List<Positioned> headResult = [];
     List<Positioned> tailResult = [];
     NodeBase selected = _visibleNodes[selectedNode!];
-    var child = widget.itemBuilder(context, selected);
+    var child = widget.itemBuilder(context, selected, selected: true);
     Size size = selected.size();
     double halfHeight = size.height / 2;
     double top = centerOfSelected - halfHeight;
@@ -95,12 +95,7 @@ class _NodeListViewState extends State<NodeListView> {
       right: constraints.minWidth,
       height: size.height,
       key: selected.key,
-      child: Container(
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.red),
-        ),
-        child: child,
-      ),
+      child: child,
     );
     tailResult.add(positioned);
     var last = selected;

@@ -19,15 +19,24 @@ class MyApp extends StatelessWidget {
           currentNode: currentNode,
           buffer: 5, // Customize buffer size here
           fallbackSize: 80.0, // Customize item height here
-          itemBuilder: (context, node) {
+          itemBuilder: (context, node, { selected = false }) {
             final exampleNode = node as HasData;
-            return Card(
+            Widget card = Card(
               margin: EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
               child: ListTile(
                 leading: Icon(Icons.label),
                 title: Text(exampleNode.data),
               ),
             );
+            if (selected) {
+              card = Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.red),
+                ),
+                child: card,
+              );
+            }
+            return card;
           },
         ),
       ),
