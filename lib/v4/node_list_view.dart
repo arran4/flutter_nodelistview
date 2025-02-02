@@ -99,6 +99,55 @@ class _NodeListViewState extends State<NodeListView> {
       child: child,
     );
     tailResult.add(selectedWidget);
-    return headResult + tailResult;
+    var last = selected;
+    for (int n = 1; top > 0; n++) {
+      NodeBase? node;
+      if (selectedNode! - n < 0) {
+        node = last.previous();
+        if (node == null) break;
+        _visibleNodes.insert(0, node);
+        selectedNode = selectedNode! + 1;
+      } else {
+        node = _visibleNodes[selectedNode! - n];
+      }
+      child = widget.itemBuilder(context, node);
+      size = node.size();
+      top -= size.height;
+      Positioned previousWidget = Positioned(
+        top: top,
+        left: 0,
+        right: constraints.minWidth,
+        height: size.height,
+        key: node.key,
+        child: child,
+      );
+      headResult.add(previousWidget);
+      last = node;
+    }
+    last = selected;
+    for (int n = 1; bottom < constraints.maxHeight; n++) {
+      NodeBase? node;
+      if (selectedNode! + n > 0) {
+        node = last.next();
+        if (node == null) break;
+        _visibleNodes.add(node);
+      } else {
+        node = _visibleNodes[selectedNode! + n];
+      }
+      child = widget.itemBuilder(context, node);
+      size = node.size();
+      Positioned nextWidget = Positioned(
+        top: bottom,
+        left: 0,
+        right: constraints.minWidth,
+        height: size.height,
+        key: node.key,
+        child: child,
+      );
+      bottom += size.height;
+      headResult.add(nextWidget);
+      last = node;
+    }
+    return headResult.reversed.toList() + tailResult;
   }
 }

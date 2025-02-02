@@ -7,79 +7,31 @@ abstract class HasData {
   String get data;
 }
 
-class ExamplePrefilledNode extends NodeBase implements HasData {
-  final String data;
-  ValueNotifier<NodeBase?> _previous;
-  ValueNotifier<NodeBase?> _next;
-
-  ExamplePrefilledNode(this.data) : _previous = ValueNotifier(null), _next = ValueNotifier(null);
-
-  @override
-  ValueNotifier<NodeBase?> previous() => _previous;
-
-  @override
-  ValueNotifier<NodeBase?> next() => _next;
-
-  void setPrevious(NodeBase? node) {
-    _previous.value = node;
-  }
-
-  void setNext(NodeBase? node) {
-    _next.value = node;
-  }
-
-  @override
-  Size size() {
-    return Size(200, 200);
-  }
-
-  @override
-  get key => ValueKey(data);
-}
-
 class ExampleInfiniteNode extends NodeBase implements HasData {
   final String data;
-  ValueNotifier<NodeBase?> _previous;
-  ValueNotifier<NodeBase?> _next;
 
-  ExampleInfiniteNode(this.data) : _previous = ValueNotifier(null), _next = ValueNotifier(null);
+  ExampleInfiniteNode(this.data);
 
   @override
-  ValueNotifier<NodeBase?> previous() {
+  NodeBase? previous() {
     RegExp exp = RegExp(r'Node (-?\d+)');
-    if (_previous.value != null) {
-      return _previous;
-    } else if (exp.hasMatch(data)) {
+    if (exp.hasMatch(data)) {
       final match = exp.firstMatch(data);
       final number = int.parse(match!.group(1)!);
-      _previous.value ??= ExampleInfiniteNode('Node ${number - 1}');
-    } else {
-      _previous.value ??= ExampleInfiniteNode('Node ${Random().nextInt(1000000)}');
+      return ExampleInfiniteNode('Node ${number - 1}');
     }
-    return _previous;
+    return null;
   }
 
   @override
-  ValueNotifier<NodeBase?> next() {
+  NodeBase? next() {
     RegExp exp = RegExp(r'Node (-?\d+)');
-    if (_next.value != null) {
-      return _next;
-    } else if (exp.hasMatch(data)) {
+    if (exp.hasMatch(data)) {
       final match = exp.firstMatch(data);
       final number = int.parse(match!.group(1)!);
-      _next.value ??= ExampleInfiniteNode('Node ${number + 1}');
-    } else {
-      _next.value ??= ExampleInfiniteNode('Node ${Random().nextInt(1000000)}');
+      return ExampleInfiniteNode('Node ${number + 1}');
     }
-    return _next;
-  }
-
-  void setPrevious(NodeBase? node) {
-    _previous.value = node;
-  }
-
-  void setNext(NodeBase? node) {
-    _next.value = node;
+    return null;
   }
 
   @override
