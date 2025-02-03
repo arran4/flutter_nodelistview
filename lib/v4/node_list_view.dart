@@ -8,7 +8,8 @@ typedef NodeWidgetBuilder = Widget Function(BuildContext context, NodeBase node,
 class NodeListView extends StatefulWidget {
   final NodeBase? currentNode;
   final NodeWidgetBuilder itemBuilder;
-  final int buffer;
+  final int minBuffer;
+  final int maxBuffer;
   final double fallbackSize;
 
   const NodeListView({
@@ -16,7 +17,8 @@ class NodeListView extends StatefulWidget {
     required this.currentNode,
     required this.itemBuilder,
     this.fallbackSize = 100.0,
-    this.buffer = 5,
+    this.minBuffer = 5,
+    this.maxBuffer = 5,
   }) : super(key: key);
 
   @override
@@ -85,25 +87,28 @@ class _NodeListViewState extends State<NodeListView> {
               scrollBehavior: ScrollBehavior(),
               // physics: AlwaysScrollableScrollPhysics(),
               controller: _scrollController,
-                viewportBuilder: (context, position) {
-                  position.applyViewportDimension(constraints.maxHeight);
-                  // TODO calculate min and max scroll extent when we know where the ends are for a better experience.
-                  position.applyContentDimensions(constraints.maxHeight * -2 - (selectedOffset??0), constraints.maxHeight * 2 - (selectedOffset??0));
-                  return Stack(
-                    fit: StackFit.expand,
-                    children: (_positions??[]).map((e) {
-                      return Positioned(
-                        top: e.top,
-                        left: 0,
-                        right: constraints.minWidth,
-                        height: e.height,
-                        key: e.node.key,
-                        child: widget.itemBuilder(context, e.node, selected: e.node == _visibleNodes[selectedNode!]),
-                      );
-                    }).toList(),
-                  );
-                },
-              ),
+              viewportBuilder: (context, position) {
+                position.applyViewportDimension(constraints.maxHeight);
+                // TODO calculate min and max scroll extent when we know where the ends are for a better experience.
+                position.applyContentDimensions(
+                    constraints.maxHeight * -2 - (selectedOffset ?? 0),
+                    constraints.maxHeight * 2 - (selectedOffset ?? 0));
+                return Stack(
+                  fit: StackFit.expand,
+                  children: (_positions ?? []).map((e) {
+                    return Positioned(
+                      top: e.top,
+                      left: 0,
+                      right: constraints.minWidth,
+                      height: e.height,
+                      key: e.node.key,
+                      child: widget.itemBuilder(context, e.node,
+                          selected: e.node == _visibleNodes[selectedNode!]),
+                    );
+                  }).toList(),
+                );
+              },
+            ),
           );
         }
     );
@@ -169,6 +174,7 @@ class _NodeListViewState extends State<NodeListView> {
     if (newSelectedNode.visiblePos != selectedNode!) {
       _changeSelectedNodeToAnotherOneInPositions(newSelectedNode.resultPos, newSelectedNode.visiblePos, result[newSelectedNode.resultPos], constraints);
     }
+    balanceBuffers();
     return result;
   }
 
@@ -189,6 +195,42 @@ class _NodeListViewState extends State<NodeListView> {
       _positions = calculatePositions(_constraints!);
     }
     _scrollController.jumpTo(0);
+  }
+
+  void balanceBuffers() {
+    if (visibleExtentUp != null) {
+      int change = 0;
+      if (visibleExtentUp! > widget.maxBuffer) {
+        var removeCount = visibleExtentUp! - widget.maxBuffer;
+        change -= removeCount;
+        _visibleNodes.removeRange(0, removeCount);
+      }
+      while (visibleExtentUp! + change < widget.minBuffer) {
+        NodeBase? node = _visibleNodes.first.previous();
+        if (node == null) break;
+        _visibleNodes.insert(0, node);
+        change++;
+      }
+      if (change != 0) {
+        if (selectedNode != null) {
+          selectedNode = selectedNode! + change;
+        }
+        visibleExtentUp = visibleExtentUp! + change;
+        if (visibleExtentDown != null) {
+          visibleExtentDown = visibleExtentDown! + change;
+        }
+      }
+    }
+    if (selectedNode != null && visibleExtentDown != null) {
+      while (_visibleNodes.length - visibleExtentDown! > widget.maxBuffer) {
+        _visibleNodes.removeLast();
+      }
+      while (_visibleNodes.length - visibleExtentDown! < widget.minBuffer) {
+        NodeBase? node = _visibleNodes.last.next();
+        if (node == null) break;
+        _visibleNodes.add(node);
+      }
+    }
   }
 }
 

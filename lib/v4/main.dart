@@ -17,7 +17,8 @@ class MyApp extends StatelessWidget {
         appBar: AppBar(title: Text('Custom Node ListView')),
         body: NodeListView(
           currentNode: currentNode,
-          buffer: 5, // Customize buffer size here
+          minBuffer: 5, // Customize buffer size here
+          maxBuffer: 5, // Customize buffer size here
           fallbackSize: 80.0, // Customize item height here
           itemBuilder: (context, node, { selected = false }) {
             final exampleNode = node as HasData;
