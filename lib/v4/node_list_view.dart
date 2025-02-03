@@ -23,7 +23,7 @@ class NodeListView extends StatefulWidget {
 
 class _NodeListViewState extends State<NodeListView> {
   final ScrollController _scrollController = ScrollController(
-    initialScrollOffset: 100,
+    initialScrollOffset: 0, // To center.
   );
   late List<NodeBase> _visibleNodes;
   int? selectedNode;
@@ -135,7 +135,7 @@ class _NodeListViewState extends State<NodeListView> {
     for (int n = 1; bottom < constraints.maxHeight; n++) {
       NodeBase? node;
       visibleExtentDown = selectedNode! + n;
-      if (visibleExtentDown! > 0) {
+      if (visibleExtentDown! > _visibleNodes.length - 1) {
         node = last.next();
         if (node == null) break;
         _visibleNodes.add(node);
@@ -153,7 +153,7 @@ class _NodeListViewState extends State<NodeListView> {
         child: child,
       );
       bottom += size.height;
-      headResult.add(positioned);
+      tailResult.add(positioned);
       last = node;
     }
     return headResult.reversed.toList() + tailResult;
