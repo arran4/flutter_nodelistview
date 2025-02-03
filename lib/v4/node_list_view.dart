@@ -72,19 +72,6 @@ class _NodeListViewState extends State<NodeListView> {
               child: Text("No nodes to display"),
             );
           }
-          if (_constraints == null) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              setState(() {
-                _constraints = constraints;
-              });
-              _positions = calculatePositions(constraints);
-            });
-          }
-          if (_positions == null) {
-            return Center(
-              child: Text("Loading..."),
-            );
-          }
           return Scrollbar(
             controller: _scrollController,
             interactive: true,
@@ -92,25 +79,31 @@ class _NodeListViewState extends State<NodeListView> {
               scrollBehavior: ScrollBehavior(),
               controller: _scrollController,
               viewportBuilder: (context, position) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    var mutated = _constraints == null || _constraints != constraints;
+                    for (_NodePositionWrapper e in (_positions ?? [])) {
+                      final newSize = e.node.key.currentContext?.size;
+                      if (newSize != null && e.node.size != newSize) {
+                        e.node.size = newSize;
+                        mutated = true;
+                      }
+                    }
+                    if (!mutated) return;
+                    setState(() {
+                      _constraints = constraints;
+                    });
+                    _positions = calculatePositions(constraints);
+                  });
+                if (_positions == null) {
+                  return Center(
+                    child: Text("Loading..."),
+                  );
+                }
                 position.applyViewportDimension(constraints.maxHeight);
                 // TODO calculate min and max scroll extent when we know where the ends are for a better experience.
                 position.applyContentDimensions(
                     constraints.maxHeight * -5,
                     constraints.maxHeight * 5);
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  var mutated = _constraints == null || _constraints != constraints;
-                  for (_NodePositionWrapper e in (_positions ?? [])) {
-                    final newSize = e.node.key.currentContext?.size;
-                    if (newSize != null && e.node.size != newSize) {
-                      e.node.size = newSize;
-                      mutated = true;
-                    }
-                  }
-                  if (mutated) {
-                    setState(() {});
-                    _positions = calculatePositions(constraints);
-                  }
-                });
                 return Stack(
                   fit: StackFit.expand,
                   children: (_positions ?? []).map((e) {
@@ -162,7 +155,13 @@ class _NodeListViewState extends State<NodeListView> {
       }
       size = node.size/* ?? Size(constraints.maxWidth, widget.fallbackSize)*/;
       var height = size?.height ?? widget.fallbackSize;
-      result.insert(0, _NodePositionWrapper(bottom: constraints.maxHeight - top, height: height, node: node, covered: coveredCalc(top - height, constraints, top, height)));
+      result.insert(0, _NodePositionWrapper(
+          top: size?.height != null ? top - height : null,
+          bottom: size?.height == null ? constraints.maxHeight - top : null,
+          height: height,
+          node: node,
+          covered: coveredCalc(top - height, constraints, top, height),
+      ));
       top -= height;
       if (size == null) {
         break;
