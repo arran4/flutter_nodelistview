@@ -68,10 +68,8 @@ class _NodeListViewState extends State<NodeListView> {
     return LayoutBuilder(
         builder: (context, constraints) {
           if (selectedNode == null) {
-            return Expanded(
-              child: Center(
-                child: Text("No nodes to display"),
-              ),
+            return Center(
+              child: Text("No nodes to display"),
             );
           }
           if (_constraints == null) {
@@ -83,10 +81,8 @@ class _NodeListViewState extends State<NodeListView> {
             });
           }
           if (_positions == null) {
-            return Expanded(
-              child: Center(
-                child: Text("Loading..."),
-              ),
+            return Center(
+              child: Text("Loading..."),
             );
           }
           return Scrollbar(
