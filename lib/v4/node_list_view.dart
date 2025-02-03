@@ -48,6 +48,9 @@ class _NodeListViewState extends State<NodeListView> {
   @override
   void dispose() {
     _scrollController.dispose();
+    for (NodeBase node in _visibleNodes) {
+      node.dispose();
+    }
     super.dispose();
   }
 
@@ -134,7 +137,7 @@ class _NodeListViewState extends State<NodeListView> {
       positionOfOriginalSelected += selectedOffset!;
     }
     NodeBase selected = _visibleNodes[selectedNode!];
-    Size size = selected.size;
+    Size size = selected.size ?? Size(constraints.maxWidth, widget.fallbackSize);
     double halfHeight = size.height / 2;
     double top = positionOfOriginalSelected - halfHeight;
     double bottom = positionOfOriginalSelected + halfHeight;
@@ -155,7 +158,7 @@ class _NodeListViewState extends State<NodeListView> {
       } else {
         node = _visibleNodes[visibleExtentUp!];
       }
-      size = node.size;
+      size = node.size ?? Size(constraints.maxWidth, widget.fallbackSize);
       top -= size.height;
       result.insert(0, VisibleType(top: top, height: size.height, node: node, covered: coveredCalc(top, constraints, top + size.height, size.height)));
       if (newSelectedNode.resultPos == 0 && (result[1].covered! > result[0].covered! || result[1].covered! == 1)) {
@@ -177,7 +180,7 @@ class _NodeListViewState extends State<NodeListView> {
       } else {
         node = _visibleNodes[visibleExtentDown!];
       }
-      size = node.size;
+      size = node.size ?? Size(constraints.maxWidth, widget.fallbackSize);
       result.add(VisibleType(top: bottom, height: size.height, node: node, covered: coveredCalc(bottom, constraints, bottom + size.height, size.height)));
       bottom += size.height;
       if (newSelectedNode.resultPos == result.length - 2 && (result[result.length - 2].covered! > result[result.length - 1].covered! || result[result.length - 2].covered! == 1)) {
@@ -216,7 +219,11 @@ class _NodeListViewState extends State<NodeListView> {
       if (visibleExtentUp! > widget.maxBuffer) {
         var removeCount = visibleExtentUp! - widget.maxBuffer;
         change -= removeCount;
+        var removed = _visibleNodes.sublist(0, removeCount);
         _visibleNodes.removeRange(0, removeCount);
+        for (NodeBase node in removed) {
+          node.dispose();
+        }
       }
       while (visibleExtentUp! + change < widget.minBuffer) {
         NodeBase? node = _visibleNodes.first.previous();
@@ -236,7 +243,8 @@ class _NodeListViewState extends State<NodeListView> {
     }
     if (selectedNode != null && visibleExtentDown != null) {
       while (_visibleNodes.length - visibleExtentDown! > widget.maxBuffer) {
-        _visibleNodes.removeLast();
+        NodeBase node = _visibleNodes.removeLast();
+        node.dispose();
       }
       while (_visibleNodes.length - visibleExtentDown! < widget.minBuffer) {
         NodeBase? node = _visibleNodes.last.next();
