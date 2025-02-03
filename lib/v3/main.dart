@@ -22,7 +22,7 @@ class InfiniteScrollApp extends StatelessWidget {
 }
 
 class InfiniteScrollView extends StatefulWidget {
-  const InfiniteScrollView({Key? key}) : super(key: key);
+  const InfiniteScrollView({super.key});
 
   @override
   State<InfiniteScrollView> createState() => _InfiniteScrollViewState();
