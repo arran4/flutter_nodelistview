@@ -28,9 +28,7 @@ class NodeListView extends StatefulWidget {
 }
 
 class _NodeListViewState extends State<NodeListView> {
-  final ScrollController _scrollController = ScrollController(
-    keepScrollOffset: false,
-  );
+  final ScrollController _scrollController = ScrollController();
   late List<NodeBase> _visibleNodes;
   int? selectedNode;
   int? visibleExtentUp;
@@ -69,16 +67,20 @@ class _NodeListViewState extends State<NodeListView> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
         builder: (context, constraints) {
-          if (_constraints == null || _constraints != constraints) {
-            _constraints = constraints;
-            _positions = calculatePositions(constraints);
-          }
           if (selectedNode == null) {
             return Expanded(
               child: Center(
                 child: Text("No nodes to display"),
               ),
             );
+          }
+          if (_constraints == null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              setState(() {
+                _constraints = constraints;
+              });
+              _positions = calculatePositions(constraints);
+            });
           }
           if (_positions == null) {
             return Expanded(
@@ -97,10 +99,10 @@ class _NodeListViewState extends State<NodeListView> {
                 position.applyViewportDimension(constraints.maxHeight);
                 // TODO calculate min and max scroll extent when we know where the ends are for a better experience.
                 position.applyContentDimensions(
-                    constraints.maxHeight * -2 - (selectedOffset ?? 0),
-                    constraints.maxHeight * 2 - (selectedOffset ?? 0));
+                    constraints.maxHeight * -5,
+                    constraints.maxHeight * 5);
                 WidgetsBinding.instance.addPostFrameCallback((_) {
-                  var mutated = false;
+                  var mutated = _constraints == null || _constraints != constraints;
                   for (_NodePositionWrapper e in (_positions ?? [])) {
                     final newSize = e.node.key.currentContext?.size;
                     if (newSize != null && e.node.size != newSize) {
@@ -118,6 +120,7 @@ class _NodeListViewState extends State<NodeListView> {
                   children: (_positions ?? []).map((e) {
                     return Positioned(
                       top: e.top,
+                      bottom: e.bottom,
                       left: 0,
                       right: constraints.minWidth,
                       key: e.node.key,
@@ -140,7 +143,7 @@ class _NodeListViewState extends State<NodeListView> {
       positionOfOriginalSelected += selectedOffset!;
     }
     NodeBase selected = _visibleNodes[selectedNode!];
-    Size size = selected.size ?? Size(constraints.maxWidth, widget.fallbackSize);
+    Size? size = selected.size ?? Size(constraints.maxWidth, widget.fallbackSize);
     double halfHeight = size.height / 2;
     double top = positionOfOriginalSelected - halfHeight;
     double bottom = positionOfOriginalSelected + halfHeight;
@@ -161,9 +164,13 @@ class _NodeListViewState extends State<NodeListView> {
       } else {
         node = _visibleNodes[visibleExtentUp!];
       }
-      size = node.size ?? Size(constraints.maxWidth, widget.fallbackSize);
-      top -= size.height;
-      result.insert(0, _NodePositionWrapper(top: top, height: size.height, node: node, covered: coveredCalc(top, constraints, top + size.height, size.height)));
+      size = node.size/* ?? Size(constraints.maxWidth, widget.fallbackSize)*/;
+      var height = size?.height ?? widget.fallbackSize;
+      result.insert(0, _NodePositionWrapper(bottom: constraints.maxHeight - top, height: height, node: node, covered: coveredCalc(top - height, constraints, top, height)));
+      top -= height;
+      if (size == null) {
+        break;
+      }
       newSelectedNode = selectedNodeTracker._backNodePropagationUpdate(newSelectedNode, result, visibleExtentUp!);
     }
     for (int n = 1; bottom < constraints.maxHeight; n++) {
@@ -176,9 +183,13 @@ class _NodeListViewState extends State<NodeListView> {
       } else {
         node = _visibleNodes[visibleExtentDown!];
       }
-      size = node.size ?? Size(constraints.maxWidth, widget.fallbackSize);
-      result.add(_NodePositionWrapper(top: bottom, height: size.height, node: node, covered: coveredCalc(bottom, constraints, bottom + size.height, size.height)));
-      bottom += size.height;
+      size = node.size/* ?? Size(constraints.maxWidth, widget.fallbackSize)*/;
+      var height = size?.height ?? widget.fallbackSize;
+      result.add(_NodePositionWrapper(top: bottom, height: height, node: node, covered: coveredCalc(bottom, constraints, bottom + height, height)));
+      bottom += height;
+      if (size == null) {
+        break;
+      }
       newSelectedNode = selectedNodeTracker._forwardNodePropagationUpdate(newSelectedNode, result, visibleExtentDown!);
     }
     if (newSelectedNode.visiblePos != selectedNode!) {
@@ -191,7 +202,11 @@ class _NodeListViewState extends State<NodeListView> {
   void _changeSelectedNodeToAnotherOneInPositions(int positionPos, int visiblePos, _NodePositionWrapper node, BoxConstraints constraints) {
     selectedNode = visiblePos;
     setState(() {
-      selectedOffset = (node.top + node.height / 2) - constraints.maxHeight / 2;
+      if (node.top != null) {
+        selectedOffset = (node.top! + node.height / 2) - constraints.maxHeight / 2;
+      } else if (node.bottom != null) {
+        selectedOffset = constraints.maxHeight / 2 - (node.bottom! - node.height / 2);
+      }
     });
   }
 
@@ -199,12 +214,14 @@ class _NodeListViewState extends State<NodeListView> {
 
   void _onScroll() {
     setState(() {
-      selectedOffset = (selectedOffset??0) - _scrollController.offset;
+      selectedOffset = (selectedOffset ?? 0) - _scrollController.offset;
     });
-    if (_constraints != null) {
-      _positions = calculatePositions(_constraints!);
-    }
     _scrollController.jumpTo(0);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_constraints != null) {
+        _positions = calculatePositions(_constraints!);
+      }
+    });
   }
 
   void balanceBuffers() {
@@ -253,9 +270,10 @@ class _NodePositionWrapper {
   double? covered;
   double height;
   NodeBase node;
-  double top;
+  double? top;
+  double? bottom;
 
-  _NodePositionWrapper({this.covered,required this.height, required this.node, required this.top});
+  _NodePositionWrapper({this.covered,required this.height, required this.node, this.top, this.bottom});
 }
 
 abstract class SelectedNodeTracker {
