@@ -22,9 +22,13 @@ class NodeListView extends StatefulWidget {
 }
 
 class _NodeListViewState extends State<NodeListView> {
-  final ScrollController _scrollController = ScrollController();
+  final ScrollController _scrollController = ScrollController(
+    initialScrollOffset: 100,
+  );
   late List<NodeBase> _visibleNodes;
   int? selectedNode;
+  int? visibleExtentUp;
+  int? visibleExtentDown;
   double? selectedOffset;
 
   @override
@@ -75,7 +79,7 @@ class _NodeListViewState extends State<NodeListView> {
     );
   }
 
-  List<Widget> _nodesAndPositions(BoxConstraints constraints) {
+  List<Widget> _nodesAndPositions(BuildContext context, BoxConstraints constraints) {
     if (selectedNode == null) return [];
     double centerOfSelected = constraints.maxHeight / 2;
     if (selectedOffset != null) {
@@ -101,13 +105,17 @@ class _NodeListViewState extends State<NodeListView> {
     var last = selected;
     for (int n = 1; top > 0; n++) {
       NodeBase? node;
-      if (selectedNode! - n < 0) {
+      visibleExtentUp = selectedNode! - n;
+      if (visibleExtentUp! < 0) {
         node = last.previous();
         if (node == null) break;
         _visibleNodes.insert(0, node);
         selectedNode = selectedNode! + 1;
+        if (visibleExtentDown != null) {
+          visibleExtentDown = visibleExtentDown! + 1;
+        }
       } else {
-        node = _visibleNodes[selectedNode! - n];
+        node = _visibleNodes[visibleExtentUp!];
       }
       child = widget.itemBuilder(context, node);
       size = node.size();
@@ -126,12 +134,13 @@ class _NodeListViewState extends State<NodeListView> {
     last = selected;
     for (int n = 1; bottom < constraints.maxHeight; n++) {
       NodeBase? node;
-      if (selectedNode! + n > 0) {
+      visibleExtentDown = selectedNode! + n;
+      if (visibleExtentDown! > 0) {
         node = last.next();
         if (node == null) break;
         _visibleNodes.add(node);
       } else {
-        node = _visibleNodes[selectedNode! + n];
+        node = _visibleNodes[visibleExtentDown!];
       }
       child = widget.itemBuilder(context, node);
       size = node.size();
