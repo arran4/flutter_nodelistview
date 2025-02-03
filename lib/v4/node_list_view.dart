@@ -68,12 +68,30 @@ class _NodeListViewState extends State<NodeListView> {
               ),
             );
           }
-          return Scrollbar(
+          return RawScrollbar(
             controller: _scrollController,
-            child: Stack(
-              fit: StackFit.expand,
-              children: _nodesAndPositions(constraints),
-            ),
+            interactive: true,
+            notificationPredicate: (notification) {
+              print("Notification: ${notification.metrics.pixels}");
+              setState(() {
+                selectedOffset = -notification.metrics.pixels;
+              });
+              return true;
+            },
+            child: Scrollable(
+              scrollBehavior: ScrollBehavior(),
+              // physics: AlwaysScrollableScrollPhysics(),
+              controller: _scrollController,
+                viewportBuilder: (context, position) {
+                  position.applyViewportDimension(constraints.maxHeight);
+                  // TODO calculate min and max scroll extent when we know where the ends are
+                  position.applyContentDimensions(constraints.maxHeight * -2 - (selectedOffset??0), constraints.maxHeight * 2 - (selectedOffset??0));
+                  return Stack(
+                    fit: StackFit.expand,
+                    children: _nodesAndPositions(context, constraints),
+                  );
+                },
+              ),
           );
         }
     );
