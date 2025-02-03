@@ -7,7 +7,14 @@ void main() {
   runApp(MyApp());
 }
 
-class MyApp extends StatelessWidget {
+Map<Key, double> size = {};
+
+class MyApp extends StatefulWidget {
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     NodeBase currentNode = ExampleInfiniteNode('Node 0'); // Start from a single node
@@ -23,10 +30,15 @@ class MyApp extends StatelessWidget {
           itemBuilder: (context, node, { selected = false }) {
             final exampleNode = node as HasData;
             Widget card = Card(
-              margin: EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
+              margin: EdgeInsets.symmetric(vertical: size[node.key]??4, horizontal: size[node.key]??4),
               child: ListTile(
                 leading: Icon(Icons.label),
                 title: Text(exampleNode.data),
+                onTap: () {
+                  setState(() {
+                    size.update(node.key, (value) => value + 1, ifAbsent: () => 4);
+                  });
+                },
               ),
             );
             if (selected) {
