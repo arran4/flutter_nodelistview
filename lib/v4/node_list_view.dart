@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import './node_base.dart';
 
@@ -72,7 +74,6 @@ class _NodeListViewState extends State<NodeListView> {
             controller: _scrollController,
             interactive: true,
             notificationPredicate: (notification) {
-              print("Notification: ${notification.metrics.pixels}");
               setState(() {
                 selectedOffset = -notification.metrics.pixels;
               });
@@ -84,7 +85,7 @@ class _NodeListViewState extends State<NodeListView> {
               controller: _scrollController,
                 viewportBuilder: (context, position) {
                   position.applyViewportDimension(constraints.maxHeight);
-                  // TODO calculate min and max scroll extent when we know where the ends are
+                  // TODO calculate min and max scroll extent when we know where the ends are for a better experience.
                   position.applyContentDimensions(constraints.maxHeight * -2 - (selectedOffset??0), constraints.maxHeight * 2 - (selectedOffset??0));
                   return Stack(
                     fit: StackFit.expand,
@@ -98,82 +99,98 @@ class _NodeListViewState extends State<NodeListView> {
   }
 
   List<Widget> _nodesAndPositions(BuildContext context, BoxConstraints constraints) {
+    List<VisibleType> result = positions(constraints);
+    return result.map((e) {
+      return Positioned(
+        top: e.top,
+        left: 0,
+        right: constraints.minWidth,
+        height: e.height,
+        key: e.node.key,
+        child: widget.itemBuilder(context, e.node, selected: e.node == _visibleNodes[selectedNode!]),
+      );
+    }).toList();
+  }
+
+  List<VisibleType>? _positions;
+
+  List<VisibleType> positions(BoxConstraints constraints) {
+    _positions ??= calculatePositions(constraints);
+    return _positions!;
+  }
+
+  List<VisibleType> calculatePositions(BoxConstraints constraints) {
     if (selectedNode == null) return [];
-    double centerOfSelected = constraints.maxHeight / 2;
+    double positionOfOriginalSelected = constraints.maxHeight / 2;
     if (selectedOffset != null) {
-      centerOfSelected += selectedOffset!;
+      positionOfOriginalSelected += selectedOffset!;
     }
-    List<Positioned> headResult = [];
-    List<Positioned> tailResult = [];
     NodeBase selected = _visibleNodes[selectedNode!];
-    var child = widget.itemBuilder(context, selected, selected: true);
     Size size = selected.size();
     double halfHeight = size.height / 2;
-    double top = centerOfSelected - halfHeight;
-    double bottom = centerOfSelected + halfHeight;
-    Positioned positioned = Positioned(
-      top: top,
-      left: 0,
-      right: constraints.minWidth,
-      height: size.height,
-      key: selected.key,
-      child: child,
-    );
-    tailResult.add(positioned);
-    var last = selected;
-    for (int n = 1; top > 0; n++) {
+    double top = positionOfOriginalSelected - halfHeight;
+    double bottom = positionOfOriginalSelected + halfHeight;
+    List<VisibleType> result = [VisibleType(top: top, height: size.height, node: selected, covered: coveredCalc(top, constraints, bottom, size.height))];
+    ({int resultPos, int visiblePos}) newSelectedNode = (resultPos: 0, visiblePos: selectedNode!);
+    for (int selectedPos = 0; top > 0; selectedPos++) {
       NodeBase? node;
-      visibleExtentUp = selectedNode! - n;
+      visibleExtentUp = selectedNode! - selectedPos - 1;
       if (visibleExtentUp! < 0) {
-        node = last.previous();
+        node = result.first.node.previous();
         if (node == null) break;
         _visibleNodes.insert(0, node);
         selectedNode = selectedNode! + 1;
+        newSelectedNode = (resultPos: selectedPos, visiblePos: newSelectedNode.visiblePos + 1);
         if (visibleExtentDown != null) {
           visibleExtentDown = visibleExtentDown! + 1;
         }
       } else {
         node = _visibleNodes[visibleExtentUp!];
       }
-      child = widget.itemBuilder(context, node);
       size = node.size();
       top -= size.height;
-      positioned = Positioned(
-        top: top,
-        left: 0,
-        right: constraints.minWidth,
-        height: size.height,
-        key: node.key,
-        child: child,
-      );
-      headResult.add(positioned);
-      last = node;
+      result.insert(0, VisibleType(top: top, height: size.height, node: node, covered: coveredCalc(top, constraints, top + size.height, size.height)));
+      if (newSelectedNode.resultPos == 0 && (result[1].covered! > result[0].covered! || result[1].covered! == 1)) {
+        newSelectedNode = (resultPos: 0, visiblePos: visibleExtentUp!);
+      } else {
+        newSelectedNode = (
+          resultPos: newSelectedNode.resultPos + 1,
+          visiblePos: newSelectedNode.visiblePos
+        );
+      }
     }
-    last = selected;
     for (int n = 1; bottom < constraints.maxHeight; n++) {
       NodeBase? node;
       visibleExtentDown = selectedNode! + n;
       if (visibleExtentDown! > _visibleNodes.length - 1) {
-        node = last.next();
+        node = result.last.node.next();
         if (node == null) break;
         _visibleNodes.add(node);
       } else {
         node = _visibleNodes[visibleExtentDown!];
       }
-      child = widget.itemBuilder(context, node);
       size = node.size();
-      positioned = Positioned(
-        top: bottom,
-        left: 0,
-        right: constraints.minWidth,
-        height: size.height,
-        key: node.key,
-        child: child,
-      );
+      result.add(VisibleType(top: bottom, height: size.height, node: node, covered: coveredCalc(bottom, constraints, bottom + size.height, size.height)));
       bottom += size.height;
-      tailResult.add(positioned);
-      last = node;
+      if (newSelectedNode.resultPos == result.length - 2 && (result[result.length - 2].covered! > result[result.length - 1].covered! || result[result.length - 2].covered! == 1)) {
+        newSelectedNode = (resultPos: result.length - 1, visiblePos: visibleExtentDown!);
+      }
     }
-    return headResult.reversed.toList() + tailResult;
+    if (newSelectedNode.visiblePos != selectedNode!) {
+      // selectedNode = newSelectedNode.visiblePos;
+      selectedOffset = selectedOffset??0 + 100;
+    }
+    return result;
   }
+
+  double coveredCalc(double top, BoxConstraints constraints, double bottom, double height) => min((0 - min(top, 0) - min(constraints.maxHeight - bottom, 0)) / height, 1);
+}
+
+class VisibleType {
+  double? covered;
+  double height;
+  NodeBase node;
+  double top;
+
+  VisibleType({this.covered,required this.height, required this.node, required this.top});
 }
