@@ -93,6 +93,20 @@ class _NodeListViewState extends State<NodeListView> {
                 position.applyContentDimensions(
                     constraints.maxHeight * -2 - (selectedOffset ?? 0),
                     constraints.maxHeight * 2 - (selectedOffset ?? 0));
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  var mutated = false;
+                  for (VisibleType e in (_positions ?? [])) {
+                    final newSize = e.node.key.currentContext?.size;
+                    if (newSize != null && e.node.size != newSize) {
+                      e.node.size = newSize;
+                      mutated = true;
+                    }
+                  }
+                  if (mutated) {
+                    setState(() {});
+                    _positions = calculatePositions(constraints);
+                  }
+                });
                 return Stack(
                   fit: StackFit.expand,
                   children: (_positions ?? []).map((e) {
@@ -100,7 +114,6 @@ class _NodeListViewState extends State<NodeListView> {
                       top: e.top,
                       left: 0,
                       right: constraints.minWidth,
-                      height: e.height,
                       key: e.node.key,
                       child: widget.itemBuilder(context, e.node,
                           selected: e.node == _visibleNodes[selectedNode!]),
@@ -121,7 +134,7 @@ class _NodeListViewState extends State<NodeListView> {
       positionOfOriginalSelected += selectedOffset!;
     }
     NodeBase selected = _visibleNodes[selectedNode!];
-    Size size = selected.size();
+    Size size = selected.size;
     double halfHeight = size.height / 2;
     double top = positionOfOriginalSelected - halfHeight;
     double bottom = positionOfOriginalSelected + halfHeight;
@@ -142,7 +155,7 @@ class _NodeListViewState extends State<NodeListView> {
       } else {
         node = _visibleNodes[visibleExtentUp!];
       }
-      size = node.size();
+      size = node.size;
       top -= size.height;
       result.insert(0, VisibleType(top: top, height: size.height, node: node, covered: coveredCalc(top, constraints, top + size.height, size.height)));
       if (newSelectedNode.resultPos == 0 && (result[1].covered! > result[0].covered! || result[1].covered! == 1)) {
@@ -164,7 +177,7 @@ class _NodeListViewState extends State<NodeListView> {
       } else {
         node = _visibleNodes[visibleExtentDown!];
       }
-      size = node.size();
+      size = node.size;
       result.add(VisibleType(top: bottom, height: size.height, node: node, covered: coveredCalc(bottom, constraints, bottom + size.height, size.height)));
       bottom += size.height;
       if (newSelectedNode.resultPos == result.length - 2 && (result[result.length - 2].covered! > result[result.length - 1].covered! || result[result.length - 2].covered! == 1)) {

@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 
 abstract class NodeBase {
-  Key get key;
+  GlobalKey get key;
 
   NodeBase? previous();
   NodeBase? next();
 
   void dispose() {}
 
-  Size size();
+  Size get size;
+  set size(Size value);
 }

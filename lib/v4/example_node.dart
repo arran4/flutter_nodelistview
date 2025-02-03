@@ -9,8 +9,12 @@ abstract class HasData {
 
 class ExampleInfiniteNode extends NodeBase implements HasData {
   final String data;
+  Size? _size;
+  Size? initialSize;
 
-  ExampleInfiniteNode(this.data);
+  GlobalKey<State<StatefulWidget>> _key;
+
+  ExampleInfiniteNode(this.data, { this.initialSize }) : _key = GlobalKey(debugLabel: data);
 
   @override
   NodeBase? previous() {
@@ -35,11 +39,19 @@ class ExampleInfiniteNode extends NodeBase implements HasData {
   }
 
   @override
-  Size size() {
-    return Size(200, 100);
+  Size get size {
+    return _size ?? initialSize ?? Size(200, 100);
   }
 
   @override
-  get key => ValueKey(data);
+  set size(Size value) {
+    if (_size != null && _size == value) {
+      return;
+    }
+    _size = value;
+  }
+
+  @override
+  get key => _key;
 }
 
