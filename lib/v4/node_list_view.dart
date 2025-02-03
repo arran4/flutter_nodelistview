@@ -130,7 +130,7 @@ class _NodeListViewState extends State<NodeListView> {
         if (node == null) break;
         _visibleNodes.insert(0, node);
         selectedNode = selectedNode! + 1;
-        newSelectedNode = (resultPos: selectedPos, visiblePos: newSelectedNode.visiblePos + 1);
+        newSelectedNode = (resultPos: newSelectedNode.resultPos, visiblePos: newSelectedNode.visiblePos + 1);
         if (visibleExtentDown != null) {
           visibleExtentDown = visibleExtentDown! + 1;
         }
