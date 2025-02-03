@@ -25,13 +25,15 @@ class NodeListView extends StatefulWidget {
 
 class _NodeListViewState extends State<NodeListView> {
   final ScrollController _scrollController = ScrollController(
-    initialScrollOffset: 0, // To center.
+    keepScrollOffset: false,
   );
   late List<NodeBase> _visibleNodes;
   int? selectedNode;
   int? visibleExtentUp;
   int? visibleExtentDown;
   double? selectedOffset;
+  List<VisibleType>? _positions;
+  BoxConstraints? _constraints;
 
   @override
   void initState() {
@@ -54,15 +56,14 @@ class _NodeListViewState extends State<NodeListView> {
     selectedNode = 0;
   }
 
-  void _onScroll() {
-    print("On scroll");
-  }
-
   @override
   Widget build(BuildContext context) {
-    print("_visibleNodes count: ${_visibleNodes.length}");
     return LayoutBuilder(
         builder: (context, constraints) {
+          if (_constraints == null || _constraints != constraints) {
+            _constraints = constraints;
+            _positions = calculatePositions(constraints);
+          }
           if (selectedNode == null) {
             return Expanded(
               child: Center(
@@ -70,15 +71,16 @@ class _NodeListViewState extends State<NodeListView> {
               ),
             );
           }
-          return RawScrollbar(
+          if (_positions == null) {
+            return Expanded(
+              child: Center(
+                child: Text("Loading..."),
+              ),
+            );
+          }
+          return Scrollbar(
             controller: _scrollController,
             interactive: true,
-            notificationPredicate: (notification) {
-              setState(() {
-                selectedOffset = -notification.metrics.pixels;
-              });
-              return true;
-            },
             child: Scrollable(
               scrollBehavior: ScrollBehavior(),
               // physics: AlwaysScrollableScrollPhysics(),
@@ -89,34 +91,22 @@ class _NodeListViewState extends State<NodeListView> {
                   position.applyContentDimensions(constraints.maxHeight * -2 - (selectedOffset??0), constraints.maxHeight * 2 - (selectedOffset??0));
                   return Stack(
                     fit: StackFit.expand,
-                    children: _nodesAndPositions(context, constraints),
+                    children: (_positions??[]).map((e) {
+                      return Positioned(
+                        top: e.top,
+                        left: 0,
+                        right: constraints.minWidth,
+                        height: e.height,
+                        key: e.node.key,
+                        child: widget.itemBuilder(context, e.node, selected: e.node == _visibleNodes[selectedNode!]),
+                      );
+                    }).toList(),
                   );
                 },
               ),
           );
         }
     );
-  }
-
-  List<Widget> _nodesAndPositions(BuildContext context, BoxConstraints constraints) {
-    List<VisibleType> result = positions(constraints);
-    return result.map((e) {
-      return Positioned(
-        top: e.top,
-        left: 0,
-        right: constraints.minWidth,
-        height: e.height,
-        key: e.node.key,
-        child: widget.itemBuilder(context, e.node, selected: e.node == _visibleNodes[selectedNode!]),
-      );
-    }).toList();
-  }
-
-  List<VisibleType>? _positions;
-
-  List<VisibleType> positions(BoxConstraints constraints) {
-    _positions ??= calculatePositions(constraints);
-    return _positions!;
   }
 
   List<VisibleType> calculatePositions(BoxConstraints constraints) {
@@ -177,13 +167,29 @@ class _NodeListViewState extends State<NodeListView> {
       }
     }
     if (newSelectedNode.visiblePos != selectedNode!) {
-      // selectedNode = newSelectedNode.visiblePos;
-      selectedOffset = selectedOffset??0 + 100;
+      _changeSelectedNodeToAnotherOneInPositions(newSelectedNode.resultPos, newSelectedNode.visiblePos, result[newSelectedNode.resultPos], constraints);
     }
     return result;
   }
 
+  void _changeSelectedNodeToAnotherOneInPositions(int positionPos, int visiblePos, VisibleType node, BoxConstraints constraints) {
+    selectedNode = visiblePos;
+    setState(() {
+      selectedOffset = (node.top + node.height / 2) - constraints.maxHeight / 2;
+    });
+  }
+
   double coveredCalc(double top, BoxConstraints constraints, double bottom, double height) => min((0 - min(top, 0) - min(constraints.maxHeight - bottom, 0)) / height, 1);
+
+  void _onScroll() {
+    setState(() {
+      selectedOffset = (selectedOffset??0) - _scrollController.offset;
+    });
+    if (_constraints != null) {
+      _positions = calculatePositions(_constraints!);
+    }
+    _scrollController.jumpTo(0);
+  }
 }
 
 class VisibleType {
