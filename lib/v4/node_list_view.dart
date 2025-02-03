@@ -6,16 +6,18 @@ import './node_base.dart';
 typedef NodeWidgetBuilder = Widget Function(BuildContext context, NodeBase node, { bool selected });
 
 class NodeListView extends StatefulWidget {
-  final NodeBase? currentNode;
+  final NodeBase? startNode;
   final NodeWidgetBuilder itemBuilder;
   final int minBuffer;
   final int maxBuffer;
   final double fallbackSize;
+  final SelectedNodeTracker? selectedNodeTracker;
 
   const NodeListView({
     Key? key,
-    required this.currentNode,
+    required this.startNode,
     required this.itemBuilder,
+    this.selectedNodeTracker,
     this.fallbackSize = 100.0,
     this.minBuffer = 5,
     this.maxBuffer = 5,
@@ -34,7 +36,8 @@ class _NodeListViewState extends State<NodeListView> {
   int? visibleExtentUp;
   int? visibleExtentDown;
   double? selectedOffset;
-  List<VisibleType>? _positions;
+  late SelectedNodeTracker selectedNodeTracker;
+  List<_NodePositionWrapper>? _positions;
   BoxConstraints? _constraints;
 
   @override
@@ -42,6 +45,7 @@ class _NodeListViewState extends State<NodeListView> {
     super.initState();
     _visibleNodes = [];
     _initializeVisibleNodes();
+    selectedNodeTracker = widget.selectedNodeTracker ?? StickySelectedNodeTracker();
     _scrollController.addListener(_onScroll);
   }
 
@@ -56,8 +60,8 @@ class _NodeListViewState extends State<NodeListView> {
 
   void _initializeVisibleNodes() {
     if (_visibleNodes.isNotEmpty) return;
-    if (widget.currentNode == null) return;
-    _visibleNodes.add(widget.currentNode!);
+    if (widget.startNode == null) return;
+    _visibleNodes.add(widget.startNode!);
     selectedNode = 0;
   }
 
@@ -88,7 +92,6 @@ class _NodeListViewState extends State<NodeListView> {
             interactive: true,
             child: Scrollable(
               scrollBehavior: ScrollBehavior(),
-              // physics: AlwaysScrollableScrollPhysics(),
               controller: _scrollController,
               viewportBuilder: (context, position) {
                 position.applyViewportDimension(constraints.maxHeight);
@@ -98,7 +101,7 @@ class _NodeListViewState extends State<NodeListView> {
                     constraints.maxHeight * 2 - (selectedOffset ?? 0));
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   var mutated = false;
-                  for (VisibleType e in (_positions ?? [])) {
+                  for (_NodePositionWrapper e in (_positions ?? [])) {
                     final newSize = e.node.key.currentContext?.size;
                     if (newSize != null && e.node.size != newSize) {
                       e.node.size = newSize;
@@ -130,7 +133,7 @@ class _NodeListViewState extends State<NodeListView> {
     );
   }
 
-  List<VisibleType> calculatePositions(BoxConstraints constraints) {
+  List<_NodePositionWrapper> calculatePositions(BoxConstraints constraints) {
     if (selectedNode == null) return [];
     double positionOfOriginalSelected = constraints.maxHeight / 2;
     if (selectedOffset != null) {
@@ -141,7 +144,7 @@ class _NodeListViewState extends State<NodeListView> {
     double halfHeight = size.height / 2;
     double top = positionOfOriginalSelected - halfHeight;
     double bottom = positionOfOriginalSelected + halfHeight;
-    List<VisibleType> result = [VisibleType(top: top, height: size.height, node: selected, covered: coveredCalc(top, constraints, bottom, size.height))];
+    List<_NodePositionWrapper> result = [_NodePositionWrapper(top: top, height: size.height, node: selected, covered: coveredCalc(top, constraints, bottom, size.height))];
     ({int resultPos, int visiblePos}) newSelectedNode = (resultPos: 0, visiblePos: selectedNode!);
     for (int selectedPos = 0; top > 0; selectedPos++) {
       NodeBase? node;
@@ -160,15 +163,8 @@ class _NodeListViewState extends State<NodeListView> {
       }
       size = node.size ?? Size(constraints.maxWidth, widget.fallbackSize);
       top -= size.height;
-      result.insert(0, VisibleType(top: top, height: size.height, node: node, covered: coveredCalc(top, constraints, top + size.height, size.height)));
-      if (newSelectedNode.resultPos == 0 && (result[1].covered! > result[0].covered! || result[1].covered! == 1)) {
-        newSelectedNode = (resultPos: 0, visiblePos: visibleExtentUp!);
-      } else {
-        newSelectedNode = (
-          resultPos: newSelectedNode.resultPos + 1,
-          visiblePos: newSelectedNode.visiblePos
-        );
-      }
+      result.insert(0, _NodePositionWrapper(top: top, height: size.height, node: node, covered: coveredCalc(top, constraints, top + size.height, size.height)));
+      newSelectedNode = selectedNodeTracker._backNodePropagationUpdate(newSelectedNode, result, visibleExtentUp!);
     }
     for (int n = 1; bottom < constraints.maxHeight; n++) {
       NodeBase? node;
@@ -181,11 +177,9 @@ class _NodeListViewState extends State<NodeListView> {
         node = _visibleNodes[visibleExtentDown!];
       }
       size = node.size ?? Size(constraints.maxWidth, widget.fallbackSize);
-      result.add(VisibleType(top: bottom, height: size.height, node: node, covered: coveredCalc(bottom, constraints, bottom + size.height, size.height)));
+      result.add(_NodePositionWrapper(top: bottom, height: size.height, node: node, covered: coveredCalc(bottom, constraints, bottom + size.height, size.height)));
       bottom += size.height;
-      if (newSelectedNode.resultPos == result.length - 2 && (result[result.length - 2].covered! > result[result.length - 1].covered! || result[result.length - 2].covered! == 1)) {
-        newSelectedNode = (resultPos: result.length - 1, visiblePos: visibleExtentDown!);
-      }
+      newSelectedNode = selectedNodeTracker._forwardNodePropagationUpdate(newSelectedNode, result, visibleExtentDown!);
     }
     if (newSelectedNode.visiblePos != selectedNode!) {
       _changeSelectedNodeToAnotherOneInPositions(newSelectedNode.resultPos, newSelectedNode.visiblePos, result[newSelectedNode.resultPos], constraints);
@@ -194,7 +188,7 @@ class _NodeListViewState extends State<NodeListView> {
     return result;
   }
 
-  void _changeSelectedNodeToAnotherOneInPositions(int positionPos, int visiblePos, VisibleType node, BoxConstraints constraints) {
+  void _changeSelectedNodeToAnotherOneInPositions(int positionPos, int visiblePos, _NodePositionWrapper node, BoxConstraints constraints) {
     selectedNode = visiblePos;
     setState(() {
       selectedOffset = (node.top + node.height / 2) - constraints.maxHeight / 2;
@@ -255,11 +249,41 @@ class _NodeListViewState extends State<NodeListView> {
   }
 }
 
-class VisibleType {
+class _NodePositionWrapper {
   double? covered;
   double height;
   NodeBase node;
   double top;
 
-  VisibleType({this.covered,required this.height, required this.node, required this.top});
+  _NodePositionWrapper({this.covered,required this.height, required this.node, required this.top});
+}
+
+abstract class SelectedNodeTracker {
+  ({int resultPos, int visiblePos}) _backNodePropagationUpdate(({int resultPos, int visiblePos}) newSelectedNode, List<_NodePositionWrapper> result, int visibleExtentUp);
+  ({int resultPos, int visiblePos}) _forwardNodePropagationUpdate(({int resultPos, int visiblePos}) newSelectedNode, List<_NodePositionWrapper> result, int visibleExtentDown);
+}
+
+class StickySelectedNodeTracker extends SelectedNodeTracker {
+  StickySelectedNodeTracker();
+
+  @override
+  ({int resultPos, int visiblePos}) _backNodePropagationUpdate(({int resultPos, int visiblePos}) newSelectedNode, List<_NodePositionWrapper> result, int visibleExtentUp) {
+    if (newSelectedNode.resultPos == 0 && (result[1].covered! > result[0].covered! || result[1].covered! == 1)) {
+      newSelectedNode = (resultPos: 0, visiblePos: visibleExtentUp);
+    } else {
+      newSelectedNode = (
+      resultPos: newSelectedNode.resultPos + 1,
+      visiblePos: newSelectedNode.visiblePos
+      );
+    }
+    return newSelectedNode;
+  }
+
+  @override
+  ({int resultPos, int visiblePos}) _forwardNodePropagationUpdate(({int resultPos, int visiblePos}) newSelectedNode, List<_NodePositionWrapper> result, int visibleExtentDown) {
+    if (newSelectedNode.resultPos == result.length - 2 && (result[result.length - 2].covered! > result[result.length - 1].covered! || result[result.length - 2].covered! == 1)) {
+      newSelectedNode = (resultPos: result.length - 1, visiblePos: visibleExtentDown);
+    }
+    return newSelectedNode;
+  }
 }
