@@ -181,7 +181,7 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
                     setState(() {
                       _constraints = constraints;
                     });
-                    _positions = calculatePositions(constraints);
+                    updatePositions(stateUpdate: false);
                   });
                 if (_positions == null) {
                   return Center(
@@ -409,12 +409,7 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
       }
       _positions = null;
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_constraints != null) {
-        updatePositions();
-        setState(() {});
-      }
-    });
+    updatePositions(stateUpdate: true);
   }
 
   void _changeSelectedNodeToAnotherOneNotInPositionsButVisible(int visiblePos, BoxConstraints? constraints, {double? offset, ScrollModes scrollMode = ScrollModes.none}) {
@@ -440,12 +435,7 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
           break;
       }
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_constraints != null) {
-        updatePositions();
-        setState(() {});
-      }
-    });
+    updatePositions(stateUpdate: true);
   }
 
   void _refreshNodePointers(T node, { bool verifyNext = true, bool verifyPrevious = true, bool recurse = false }) {
