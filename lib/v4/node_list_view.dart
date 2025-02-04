@@ -5,6 +5,12 @@ import './node_base.dart';
 
 typedef NodeWidgetBuilder<T> = Widget Function(BuildContext context, T node, { bool selected });
 
+enum ScrollModes {
+  none,
+  reset,
+  setOffset, fitNode,
+}
+
 class NodeListViewController<T extends NodeBase> {
   NodeListViewState<T>? _nodeListViewState;
 
@@ -18,7 +24,7 @@ class NodeListViewController<T extends NodeBase> {
     _nodeListViewState = null;
   }
 
-  void jumpTo(T node, {bool keepVisible = false}) {
+  void jumpTo(T node, {ScrollModes scrollMode = ScrollModes.none}) {
     if (_nodeListViewState == null) return;
     ({ int? positionPos, _NodePositionWrapper<T>? positionWrapper, int visiblePos })? index = _nodeListViewState!.findNode(node);
     if (index?.positionPos != null && index?.positionWrapper != null) {
@@ -26,40 +32,40 @@ class NodeListViewController<T extends NodeBase> {
       return;
     }
     if (index?.visiblePos != null) {
-      _nodeListViewState!._changeSelectedNodeToAnotherOneNotInPositionsButVisible(index!.visiblePos, null, makeVisible: keepVisible);
+      _nodeListViewState!._changeSelectedNodeToAnotherOneNotInPositionsButVisible(index!.visiblePos, null, scrollMode: ScrollModes.none);
       return;
     }
     _nodeListViewState!._resetSelectedNodeToNewNode(node);
   }
 
-  void selectNext() {
+  void selectNext({ScrollModes scrollMode = ScrollModes.none}) {
     if (_nodeListViewState == null) return;
     if (_nodeListViewState!._selectedNode == null) return;
     T? next = _nodeListViewState!._selectedNode?.next();
     if (next == null) return;
-    jumpTo(next, keepVisible: true);
+    jumpTo(next, scrollMode: scrollMode);
   }
   
-  void selectPrevious() {
+  void selectPrevious({ScrollModes scrollMode = ScrollModes.none}) {
     if (_nodeListViewState == null) return;
     if (_nodeListViewState!._selectedNode == null) return;
     T? next = _nodeListViewState!._selectedNode?.previous();
     if (next == null) return;
-    jumpTo(next, keepVisible: true);
+    jumpTo(next, scrollMode: scrollMode);
   }
 
-  void selectFirstVisible() {
+  void selectFirstVisible({ScrollModes scrollMode = ScrollModes.reset}) {
     if (_nodeListViewState == null) return;
     T? next = _nodeListViewState!._positions?.firstOrNull?.node;
     if (next == null) return;
-    jumpTo(next, keepVisible: true);
+    jumpTo(next, scrollMode: scrollMode);
   }
 
-  void selectLastVisible() {
+  void selectLastVisible({ScrollModes scrollMode = ScrollModes.reset}) {
     if (_nodeListViewState == null) return;
     T? next = _nodeListViewState!._positions?.lastOrNull?.node;
     if (next == null) return;
-    jumpTo(next, keepVisible: true);
+    jumpTo(next, scrollMode: scrollMode);
   }
 }
 
@@ -258,7 +264,7 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
       newSelectedNode = selectedNodeTracker._forwardNodePropagationUpdate(newSelectedNode, result, visibleExtentDown!);
     }
     if (newSelectedNode.visiblePos != selectedNode!) {
-      _changeSelectedNodeToAnotherOneInPositions(newSelectedNode.resultPos, newSelectedNode.visiblePos, result[newSelectedNode.resultPos], constraints);
+      _changeSelectedNodeToAnotherOneInPositions(newSelectedNode.resultPos, newSelectedNode.visiblePos, result[newSelectedNode.resultPos], constraints, scrollMode: ScrollModes.fitNode);
     }
     balanceBuffers();
     return result;
@@ -269,7 +275,7 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
     return _positions?.where((e) => e.node == _visibleNodes[selectedNode!]).firstOrNull;
   }
 
-  void _changeSelectedNodeToAnotherOneInPositions(int positionPos, int visiblePos, _NodePositionWrapper<T> node, BoxConstraints? constraints) {
+  void _changeSelectedNodeToAnotherOneInPositions(int positionPos, int visiblePos, _NodePositionWrapper<T> node, BoxConstraints? constraints, {ScrollModes scrollMode = ScrollModes.none, double? offset}) {
     selectedNode = visiblePos;
     if (_positions == null) {
       return;
@@ -278,7 +284,25 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
     if (cons == null) {
       return;
     }
-    setState(() {});
+    setState(() {
+      switch (scrollMode) {
+        case ScrollModes.setOffset:
+          selectedOffset = offset;
+          break;
+        case ScrollModes.none:
+          break;
+        case ScrollModes.fitNode:
+          if (node.top != null) {
+            selectedOffset = (node.top! + node.height / 2) - cons.maxHeight / 2;
+          } else if (node.bottom != null) {
+            selectedOffset = cons.maxHeight / 2 - (node.bottom! - node.height / 2);
+          }
+          break;
+        case ScrollModes.reset:
+          selectedOffset = null;
+          break;
+      }
+    });
   }
 
   double coveredCalc(double top, BoxConstraints constraints, double bottom, double height) => min((0 - min(top, 0) - min(constraints.maxHeight - bottom, 0)) / height, 1);
@@ -347,11 +371,22 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
     return ( positionPos: posPos, positionWrapper: position, visiblePos: visPos );
   }
 
-  void _resetSelectedNodeToNewNode(T node, {double? offset}) {
+  void _resetSelectedNodeToNewNode(T node, {double? offset, ScrollModes scrollMode = ScrollModes.none}) {
     _visibleNodes = [node];
     selectedNode = 0;
     setState(() {
-      selectedOffset = offset;
+      switch (scrollMode) {
+        case ScrollModes.setOffset:
+          selectedOffset = offset;
+          break;
+        case ScrollModes.fitNode:
+          break;
+        case ScrollModes.none:
+          break;
+        case ScrollModes.reset:
+          selectedOffset = null;
+          break;
+      }
       _positions = null;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -362,20 +397,27 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
     });
   }
 
-  void _changeSelectedNodeToAnotherOneNotInPositionsButVisible(int visiblePos, BoxConstraints? constraints, {double? offset, bool makeVisible = false}) {
+  void _changeSelectedNodeToAnotherOneNotInPositionsButVisible(int visiblePos, BoxConstraints? constraints, {double? offset, ScrollModes scrollMode = ScrollModes.none}) {
     selectedNode = visiblePos;
-    if (constraints == null) return;
+    var cons = (constraints ?? _constraints);
+    if (cons == null) return;
     setState(() {
-      if (offset != null) {
-        selectedOffset = offset;
-      } else if (makeVisible && _selectedNode?.size != null) {
-        if (selectedNode! < visiblePos) {
-          selectedOffset = constraints.maxHeight / 2 - _visibleNodes[selectedNode!].size!.height / 2;
-        } else {
-          selectedOffset = constraints.maxHeight / -2 + _visibleNodes[selectedNode!].size!.height / 2;
-        }
-      } else {
-        selectedOffset = null;
+      switch (scrollMode) {
+        case ScrollModes.setOffset:
+          selectedOffset = offset;
+          break;
+        case ScrollModes.fitNode:
+          // if (node.top != null) {
+          //   selectedOffset = (node.top! + node.height / 2) - cons.maxHeight / 2;
+          // } else if (node.bottom != null) {
+          //   selectedOffset = cons.maxHeight / 2 - (node.bottom! - node.height / 2);
+          // }
+          break;
+        case ScrollModes.none:
+          break;
+        case ScrollModes.reset:
+          selectedOffset = null;
+          break;
       }
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
