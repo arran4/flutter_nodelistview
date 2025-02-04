@@ -3,40 +3,107 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import './node_base.dart';
 
-typedef NodeWidgetBuilder = Widget Function(BuildContext context, NodeBase node, { bool selected });
+typedef NodeWidgetBuilder<T> = Widget Function(BuildContext context, T node, { bool selected });
 
-class NodeListView extends StatefulWidget {
-  final NodeBase? startNode;
-  final NodeWidgetBuilder itemBuilder;
+class NodeListViewController<T extends NodeBase> {
+  NodeListViewState<T>? _nodeListViewState;
+
+  NodeListViewController();
+
+  void attach(NodeListViewState<T> nodeListViewState) {
+    _nodeListViewState = nodeListViewState;
+  }
+
+  void detach() {
+    _nodeListViewState = null;
+  }
+
+  void jumpTo(T node, {bool keepVisible = false}) {
+    if (_nodeListViewState == null) return;
+    ({ int? positionPos, _NodePositionWrapper<T>? positionWrapper, int visiblePos })? index = _nodeListViewState!.findNode(node);
+    if (index?.positionPos != null && index?.positionWrapper != null) {
+      _nodeListViewState!._changeSelectedNodeToAnotherOneInPositions(index!.positionPos!, index.visiblePos, index.positionWrapper!, null);
+      return;
+    }
+    if (index?.visiblePos != null) {
+      _nodeListViewState!._changeSelectedNodeToAnotherOneNotInPositionsButVisible(index!.visiblePos, null, makeVisible: keepVisible);
+      return;
+    }
+    _nodeListViewState!._resetSelectedNodeToNewNode(node);
+  }
+
+  void selectNext() {
+    if (_nodeListViewState == null) return;
+    if (_nodeListViewState!._selectedNode == null) return;
+    T? next = _nodeListViewState!._selectedNode?.next();
+    if (next == null) return;
+    jumpTo(next, keepVisible: true);
+  }
+  
+  void selectPrevious() {
+    if (_nodeListViewState == null) return;
+    if (_nodeListViewState!._selectedNode == null) return;
+    T? next = _nodeListViewState!._selectedNode?.previous();
+    if (next == null) return;
+    jumpTo(next, keepVisible: true);
+  }
+
+  void selectFirstVisible() {
+    if (_nodeListViewState == null) return;
+    T? next = _nodeListViewState!._positions?.firstOrNull?.node;
+    if (next == null) return;
+    jumpTo(next, keepVisible: true);
+  }
+
+  void selectLastVisible() {
+    if (_nodeListViewState == null) return;
+    T? next = _nodeListViewState!._positions?.lastOrNull?.node;
+    if (next == null) return;
+    jumpTo(next, keepVisible: true);
+  }
+}
+
+class NodeListView<T extends NodeBase> extends StatefulWidget {
+  final T? startNode;
+  final NodeWidgetBuilder<T> itemBuilder;
   final int minBuffer;
   final int maxBuffer;
   final double fallbackSize;
   final SelectedNodeTracker? selectedNodeTracker;
+  final NodeListViewController<T>? controller;
 
   const NodeListView({
-    Key? key,
+    super.key,
     required this.startNode,
     required this.itemBuilder,
     this.selectedNodeTracker,
+    this.controller,
     this.fallbackSize = 100.0,
     this.minBuffer = 5,
     this.maxBuffer = 5,
-  }) : super(key: key);
+  });
 
   @override
-  _NodeListViewState createState() => _NodeListViewState();
+  NodeListViewState<T> createState() => NodeListViewState();
 }
 
-class _NodeListViewState extends State<NodeListView> {
+class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
   final ScrollController _scrollController = ScrollController();
-  late List<NodeBase> _visibleNodes;
+  late List<T> _visibleNodes;
   int? selectedNode;
   int? visibleExtentUp;
   int? visibleExtentDown;
   double? selectedOffset;
   late SelectedNodeTracker selectedNodeTracker;
-  List<_NodePositionWrapper>? _positions;
+  NodeListViewController<T>? _controller;
+  List<_NodePositionWrapper<T>>? _positions;
   BoxConstraints? _constraints;
+
+  T? get _selectedNode {
+    if (selectedNode == null) return null;
+    if (selectedNode! < 0 || selectedNode! >= _visibleNodes.length) return null;
+    return _visibleNodes[selectedNode!];
+  }
 
   @override
   void initState() {
@@ -45,12 +112,15 @@ class _NodeListViewState extends State<NodeListView> {
     _initializeVisibleNodes();
     selectedNodeTracker = widget.selectedNodeTracker ?? StickySelectedNodeTracker();
     _scrollController.addListener(_onScroll);
+    _controller = widget.controller;
+    _controller?.attach(this);
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
-    for (NodeBase node in _visibleNodes) {
+    _controller?.detach();
+    for (T node in _visibleNodes) {
       node.dispose();
     }
     super.dispose();
@@ -125,21 +195,21 @@ class _NodeListViewState extends State<NodeListView> {
     );
   }
 
-  List<_NodePositionWrapper> calculatePositions(BoxConstraints constraints) {
+  List<_NodePositionWrapper<T>> calculatePositions(BoxConstraints constraints) {
     if (selectedNode == null) return [];
     double positionOfOriginalSelected = constraints.maxHeight / 2;
     if (selectedOffset != null) {
       positionOfOriginalSelected += selectedOffset!;
     }
-    NodeBase selected = _visibleNodes[selectedNode!];
+    T selected = _visibleNodes[selectedNode!];
     Size? size = selected.size ?? Size(constraints.maxWidth, widget.fallbackSize);
     double halfHeight = size.height / 2;
     double top = positionOfOriginalSelected - halfHeight;
     double bottom = positionOfOriginalSelected + halfHeight;
-    List<_NodePositionWrapper> result = [_NodePositionWrapper(top: top, height: size.height, node: selected, covered: coveredCalc(top, constraints, bottom, size.height))];
+    List<_NodePositionWrapper<T>> result = [_NodePositionWrapper(top: top, height: size.height, node: selected, covered: coveredCalc(top, constraints, bottom, size.height))];
     ({int resultPos, int visiblePos}) newSelectedNode = (resultPos: 0, visiblePos: selectedNode!);
     for (int selectedPos = 0; top > 0; selectedPos++) {
-      NodeBase? node;
+      T? node;
       visibleExtentUp = selectedNode! - selectedPos - 1;
       if (visibleExtentUp! < 0) {
         node = result.first.node.previous();
@@ -169,7 +239,7 @@ class _NodeListViewState extends State<NodeListView> {
       newSelectedNode = selectedNodeTracker._backNodePropagationUpdate(newSelectedNode, result, visibleExtentUp!);
     }
     for (int n = 1; bottom < constraints.maxHeight; n++) {
-      NodeBase? node;
+      T? node;
       visibleExtentDown = selectedNode! + n;
       if (visibleExtentDown! > _visibleNodes.length - 1) {
         node = result.last.node.next();
@@ -194,15 +264,21 @@ class _NodeListViewState extends State<NodeListView> {
     return result;
   }
 
-  void _changeSelectedNodeToAnotherOneInPositions(int positionPos, int visiblePos, _NodePositionWrapper node, BoxConstraints constraints) {
+  _NodePositionWrapper<T>? get _selectedPosition {
+    if (_positions == null) return _NodePositionWrapper(height: 0, node: _visibleNodes[selectedNode!]);
+    return _positions?.where((e) => e.node == _visibleNodes[selectedNode!]).firstOrNull;
+  }
+
+  void _changeSelectedNodeToAnotherOneInPositions(int positionPos, int visiblePos, _NodePositionWrapper<T> node, BoxConstraints? constraints) {
     selectedNode = visiblePos;
-    setState(() {
-      if (node.top != null) {
-        selectedOffset = (node.top! + node.height / 2) - constraints.maxHeight / 2;
-      } else if (node.bottom != null) {
-        selectedOffset = constraints.maxHeight / 2 - (node.bottom! - node.height / 2);
-      }
-    });
+    if (_positions == null) {
+      return;
+    }
+    var cons = (constraints ?? _constraints);
+    if (cons == null) {
+      return;
+    }
+    setState(() {});
   }
 
   double coveredCalc(double top, BoxConstraints constraints, double bottom, double height) => min((0 - min(top, 0) - min(constraints.maxHeight - bottom, 0)) / height, 1);
@@ -232,7 +308,7 @@ class _NodeListViewState extends State<NodeListView> {
         }
       }
       while (visibleExtentUp! + change < widget.minBuffer) {
-        NodeBase? node = _visibleNodes.first.previous();
+        T? node = _visibleNodes.first.previous();
         if (node == null) break;
         _visibleNodes.insert(0, node);
         change++;
@@ -253,18 +329,68 @@ class _NodeListViewState extends State<NodeListView> {
         node.dispose();
       }
       while (_visibleNodes.length - visibleExtentDown! < widget.minBuffer) {
-        NodeBase? node = _visibleNodes.last.next();
+        T? node = _visibleNodes.last.next();
         if (node == null) break;
         _visibleNodes.add(node);
       }
     }
   }
+
+  ({ int? positionPos, _NodePositionWrapper<T>? positionWrapper, int visiblePos })? findNode(T node) {
+    int? visPos = _visibleNodes.indexOf(node);
+    if (visPos == -1) return null;
+    int? posPos = _positions?.indexWhere((e) => e.node == node);
+    if (posPos == -1 || posPos == null) {
+      return (visiblePos: visPos, positionWrapper: null, positionPos: null);
+    }
+    _NodePositionWrapper<T>? position = _positions![posPos];
+    return ( positionPos: posPos, positionWrapper: position, visiblePos: visPos );
+  }
+
+  void _resetSelectedNodeToNewNode(T node, {double? offset}) {
+    _visibleNodes = [node];
+    selectedNode = 0;
+    setState(() {
+      selectedOffset = offset;
+      _positions = null;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_constraints != null) {
+        _positions = calculatePositions(_constraints!);
+        setState(() {});
+      }
+    });
+  }
+
+  void _changeSelectedNodeToAnotherOneNotInPositionsButVisible(int visiblePos, BoxConstraints? constraints, {double? offset, bool makeVisible = false}) {
+    selectedNode = visiblePos;
+    if (constraints == null) return;
+    setState(() {
+      if (offset != null) {
+        selectedOffset = offset;
+      } else if (makeVisible && _selectedNode?.size != null) {
+        if (selectedNode! < visiblePos) {
+          selectedOffset = constraints.maxHeight / 2 - _visibleNodes[selectedNode!].size!.height / 2;
+        } else {
+          selectedOffset = constraints.maxHeight / -2 + _visibleNodes[selectedNode!].size!.height / 2;
+        }
+      } else {
+        selectedOffset = null;
+      }
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_constraints != null) {
+        _positions = calculatePositions(_constraints!);
+        setState(() {});
+      }
+    });
+  }
 }
 
-class _NodePositionWrapper {
+class _NodePositionWrapper<T> {
   double? covered;
   double height;
-  NodeBase node;
+  T node;
   double? top;
   double? bottom;
 

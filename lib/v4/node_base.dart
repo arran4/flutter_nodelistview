@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
-abstract class NodeBase {
+abstract class NodeBase<T> {
   NodeBase(this.key, { this.size});
 
   GlobalKey<State<StatefulWidget>> key;
   Size? size;
 
-  NodeBase? previous();
-  NodeBase? next();
+  T? previous();
+  T? next();
 
   void dispose() {}
 }

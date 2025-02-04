@@ -3,36 +3,41 @@ import 'dart:math';
 import 'package:flutter/widgets.dart';
 import './node_base.dart';
 
-abstract class HasData {
-  String get data;
-}
+class ExampleInfiniteNode extends NodeBase<ExampleInfiniteNode> {
+  ExampleInfiniteNode({required this.x, required this.y}) : super(GlobalKey());
+  final int x;
+  final int y;
 
-class ExampleInfiniteNode extends NodeBase implements HasData {
-  @override
-  final String data;
-
-  ExampleInfiniteNode(this.data) : super(GlobalKey());
+  ExampleInfiniteNode? _previous;
 
   @override
-  NodeBase? previous() {
-    RegExp exp = RegExp(r'Node (-?\d+)');
-    if (exp.hasMatch(data)) {
-      final match = exp.firstMatch(data);
-      final number = int.parse(match!.group(1)!);
-      return ExampleInfiniteNode('Node ${number - 1}');
-    }
-    return null;
+  ExampleInfiniteNode? previous() {
+    _previous ??= ExampleInfiniteNode(x: x, y: y - 1);
+    return _previous;
   }
 
+  ExampleInfiniteNode? _next;
+
   @override
-  NodeBase? next() {
-    RegExp exp = RegExp(r'Node (-?\d+)');
-    if (exp.hasMatch(data)) {
-      final match = exp.firstMatch(data);
-      final number = int.parse(match!.group(1)!);
-      return ExampleInfiniteNode('Node ${number + 1}');
-    }
-    return null;
+  ExampleInfiniteNode? next() {
+    _next ??= ExampleInfiniteNode(x: x, y: y + 1);
+    return _next;
+  }
+
+  ExampleInfiniteNode? _left;
+
+  ExampleInfiniteNode left() {
+    _left ??= ExampleInfiniteNode(x: x - 1, y: y);
+    return _left!;
+  }
+
+  ExampleInfiniteNode? _right;
+
+  get label => 'Node $x,$y';
+
+  ExampleInfiniteNode right() {
+    _right ??= ExampleInfiniteNode(x: x + 1, y: y);
+    return _right!;
   }
 }
 
