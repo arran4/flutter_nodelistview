@@ -45,6 +45,9 @@ class _MyAppState extends State<MyApp> {
             IconButton(onPressed: (){
               _nodeController.selectLastVisible();
             }, icon: Icon(Icons.keyboard_double_arrow_down)),
+            IconButton(onPressed: () {
+              _nodeController.refreshAllNodePointers();
+            }, icon: Icon(Icons.refresh)),
           ],
         ),
         body: NodeListView<ExampleInfiniteNode>(
@@ -91,6 +94,13 @@ class _MyAppState extends State<MyApp> {
                         _nodeController.jumpTo(n);
                       },
                     ),
+                    IconButton(onPressed: () {
+                      _nodeController.refreshNodePointers(node);
+                    }, icon: Icon(Icons.refresh)),
+                    IconButton(onPressed: () {
+                      node.delete();
+                      _nodeController.refreshAllNodePointers();
+                    }, icon: Icon(Icons.delete_sweep)),
                   ],
                 ),
               ),

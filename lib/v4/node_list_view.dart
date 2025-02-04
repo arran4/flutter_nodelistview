@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:untitled6/v4/example_node.dart';
 import './node_base.dart';
 
 typedef NodeWidgetBuilder<T> = Widget Function(BuildContext context, T node, { bool selected });
@@ -66,6 +67,18 @@ class NodeListViewController<T extends NodeBase> {
     T? next = _nodeListViewState!._positions?.lastOrNull?.node;
     if (next == null) return;
     jumpTo(next, scrollMode: scrollMode);
+  }
+
+  void refreshNodePointers(T node, { bool verifyNext = true, bool verifyPrevious = true }) {
+    if (_nodeListViewState == null) return;
+    _nodeListViewState!._refreshNodePointers(node, verifyNext: verifyNext, verifyPrevious: verifyPrevious);
+    _nodeListViewState!.updatePositions(stateUpdate: true);
+  }
+
+  void refreshAllNodePointers() {
+    if (_nodeListViewState?._selectedNode == null) return;
+    _nodeListViewState!._refreshNodePointers(_nodeListViewState!._selectedNode!, recurse: true);
+    _nodeListViewState!.updatePositions(stateUpdate: true);
   }
 }
 
@@ -312,9 +325,16 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
       selectedOffset = (selectedOffset ?? 0) - _scrollController.offset;
     });
     _scrollController.jumpTo(0);
+    updatePositions();
+  }
+
+  void updatePositions({bool stateUpdate = false}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_constraints != null) {
         _positions = calculatePositions(_constraints!);
+        if (stateUpdate) {
+          setState(() {});
+        }
       }
     });
   }
@@ -391,7 +411,7 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_constraints != null) {
-        _positions = calculatePositions(_constraints!);
+        updatePositions();
         setState(() {});
       }
     });
@@ -422,10 +442,46 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_constraints != null) {
-        _positions = calculatePositions(_constraints!);
+        updatePositions();
         setState(() {});
       }
     });
+  }
+
+  void _refreshNodePointers(T node, { bool verifyNext = true, bool verifyPrevious = true, bool recurse = false }) {
+    var visibleNodeIndex = _visibleNodes.indexWhere((e) => e == node);
+    if (visibleNodeIndex == -1) return;
+    if (verifyNext) {
+      var visibleNext = (_visibleNodes.length ?? 0) > visibleNodeIndex + 1
+          ? _visibleNodes[visibleNodeIndex + 1]
+          : null;
+      var nodeNext = node.next();
+      if (visibleNext != null && nodeNext != visibleNext) {
+        _visibleNodes.removeRange(visibleNodeIndex + 1, _visibleNodes.length);
+        var index = _positions?.indexWhere((e) => e.node == visibleNext);
+        if (index != null && index != -1) {
+          _positions?.removeRange(index + 1, _positions!.length);
+          visibleExtentDown = min(visibleExtentDown!, index);
+        }
+      } else if (recurse) {
+        _refreshNodePointers(nodeNext!, verifyNext: true, verifyPrevious: false, recurse: true);
+      }
+    }
+    if (verifyPrevious) {
+      var visiblePrevious = visibleNodeIndex > 0 ? _visibleNodes[visibleNodeIndex-1] : null;
+      var nodePrevious = node.previous();
+      if (visiblePrevious != null && nodePrevious != visiblePrevious) {
+        _visibleNodes.removeRange(0, visibleNodeIndex);
+        var index = _positions?.indexWhere((e) => e.node == visiblePrevious);
+        if (index != null && index != -1) {
+          _positions?.removeRange(0, index);
+        }
+        visibleExtentUp = visibleExtentUp! - visibleNodeIndex;
+        selectedNode = selectedNode! - visibleNodeIndex;
+      } else if (recurse) {
+        _refreshNodePointers(nodePrevious!, verifyNext: false, verifyPrevious: true, recurse: true);
+      }
+    }
   }
 }
 
