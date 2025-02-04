@@ -1,10 +1,11 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:untitled6/v4/example_node.dart';
 import './node_base.dart';
 
-typedef NodeWidgetBuilder<T> = Widget Function(BuildContext context, T node, { bool selected });
+typedef NodeWidgetBuilder<T extends NodeBase> = Widget Function(BuildContext context, T node, { bool selected });
 
 enum ScrollModes {
   none,
@@ -117,6 +118,7 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
   NodeListViewController<T>? _controller;
   List<_NodePositionWrapper<T>>? _positions;
   BoxConstraints? _constraints;
+  bool mutated = false;
 
   T? get _selectedNode {
     if (selectedNode == null) return null;
@@ -161,6 +163,14 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
               child: Text("No nodes to display"),
             );
           }
+          if (_constraints == null || _constraints != constraints) {
+            _constraints = constraints;
+            _positions = null;
+          }
+          if (_positions == null || mutated) {
+            updatePositions(stateUpdate: true);
+            mutated = false;
+          }
           return Scrollbar(
             controller: _scrollController,
             interactive: true,
@@ -168,21 +178,6 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
               scrollBehavior: ScrollBehavior(),
               controller: _scrollController,
               viewportBuilder: (context, position) {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    var mutated = _constraints == null || _constraints != constraints;
-                    for (_NodePositionWrapper e in (_positions ?? [])) {
-                      final newSize = e.node.key.currentContext?.size;
-                      if (newSize != null && e.node.size != newSize) {
-                        e.node.size = newSize;
-                        mutated = true;
-                      }
-                    }
-                    if (!mutated) return;
-                    setState(() {
-                      _constraints = constraints;
-                    });
-                    updatePositions(stateUpdate: false);
-                  });
                 if (_positions == null) {
                   return Center(
                     child: Text("Loading..."),
@@ -200,10 +195,20 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
                       top: e.top,
                       bottom: e.bottom,
                       left: 0,
-                      right: constraints.minWidth,
                       key: e.node.key,
-                      child: widget.itemBuilder(context, e.node,
-                          selected: e.node == _visibleNodes[selectedNode!]),
+                      right: constraints.minWidth,
+                      child: NodeSizeChangedMonitor(
+                        node: e.node,
+                        updated: () {
+                          WidgetsBinding.instance!.addPostFrameCallback((_) {
+                            setState(() {
+                              mutated = true;
+                            });
+                          });
+                        },
+                        child: widget.itemBuilder(context, e.node,
+                            selected: e.node == _visibleNodes[selectedNode!]), // Ensure it doesn't get reused incorrectly
+                      ),
                     );
                   }).toList(),
                 );
@@ -475,7 +480,7 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
   }
 }
 
-class _NodePositionWrapper<T> {
+class _NodePositionWrapper<T extends NodeBase> {
   double? covered;
   double height;
   T node;
@@ -512,5 +517,49 @@ class StickySelectedNodeTracker extends SelectedNodeTracker {
       newSelectedNode = (resultPos: result.length - 1, visiblePos: visibleExtentDown);
     }
     return newSelectedNode;
+  }
+}
+
+class NodeSizeChangedMonitor<T extends NodeBase> extends SingleChildRenderObjectWidget {
+  T node;
+  Function updated;
+
+  NodeSizeChangedMonitor({
+    required this.node,
+    required this.updated,
+    super.key,
+    super.child,
+  });
+
+  @override
+  RenderObject createRenderObject(BuildContext context) {
+    return _RenderSizeChangedWithCallback(
+      onLayoutChangedCallback: (size) {
+        if (size != node.size) {
+          node.size = size;
+          updated();
+        }
+      },
+    );
+  }
+}
+
+class _RenderSizeChangedWithCallback extends RenderProxyBox {
+  _RenderSizeChangedWithCallback({
+    RenderBox? child,
+    required this.onLayoutChangedCallback,
+  }) : super(child);
+
+  final Function(Size? size) onLayoutChangedCallback;
+
+  Size? _oldSize;
+
+  @override
+  void performLayout() {
+    super.performLayout();
+    if (size != _oldSize) {
+      onLayoutChangedCallback(size);
+    }
+    _oldSize = size;
   }
 }
