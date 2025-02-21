@@ -32,22 +32,24 @@ class _MyAppState extends State<MyApp> {
               onPressed: () {
                 _nodeController.selectNext();
               },
+              tooltip: "Next",
             ),
             IconButton(
               icon: Icon(Icons.keyboard_arrow_up),
               onPressed: () {
                 _nodeController.selectPrevious();
               },
+              tooltip: "Previous",
             ),
             IconButton(onPressed: (){
               _nodeController.selectFirstVisible();
-            }, icon: Icon(Icons.keyboard_double_arrow_up)),
+            }, icon: Icon(Icons.keyboard_double_arrow_up), tooltip: "First visible"),
             IconButton(onPressed: (){
               _nodeController.selectLastVisible();
-            }, icon: Icon(Icons.keyboard_double_arrow_down)),
+            }, icon: Icon(Icons.keyboard_double_arrow_down), tooltip: "Last visible"),
             IconButton(onPressed: () {
               _nodeController.refreshAllNodePointers();
-            }, icon: Icon(Icons.refresh)),
+            }, icon: Icon(Icons.refresh), tooltip: "Refresh all"),
           ],
         ),
         body: NodeListView<ExampleInfiniteNode>(
@@ -71,6 +73,7 @@ class _MyAppState extends State<MyApp> {
                           size.update(node.key, (value) => value + 1, ifAbsent: () => 4);
                         });
                       },
+                      tooltip: "Increase size",
                     ),
                     IconButton(
                       icon: Icon(Icons.remove),
@@ -79,28 +82,35 @@ class _MyAppState extends State<MyApp> {
                           size.update(node.key, (value) => value - 1, ifAbsent: () => 4);
                         });
                       },
+                      tooltip: "Decrease size",
                     ),
                     IconButton(
-                      icon: Icon(Icons.keyboard_double_arrow_left),
+                      icon: Icon(Icons.keyboard_arrow_left),
                       onPressed: () {
                         ExampleInfiniteNode n = node.left();
                         _nodeController.jumpTo(n);
                       },
+                      tooltip: "Left",
                     ),
                     IconButton(
-                      icon: Icon(Icons.keyboard_double_arrow_right),
+                      icon: Icon(Icons.keyboard_arrow_right),
                       onPressed: () {
                         ExampleInfiniteNode n = node.right();
                         _nodeController.jumpTo(n);
                       },
+                      tooltip: "Right",
                     ),
                     IconButton(onPressed: () {
                       _nodeController.refreshNodePointers(node);
-                    }, icon: Icon(Icons.refresh)),
+                    }, icon: Icon(Icons.refresh), tooltip: "Refresh"),
                     IconButton(onPressed: () {
-                      node.delete();
+                      if (selected) {
+                        _nodeController.jumpTo(ExampleInfiniteNode(x: 0, y: 0));
+                      } else {
+                        node.delete();
+                      }
                       _nodeController.refreshAllNodePointers();
-                    }, icon: Icon(Icons.delete_sweep)),
+                    }, icon: Icon(Icons.delete_sweep), tooltip: "Delete"),
                   ],
                 ),
               ),
