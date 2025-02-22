@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:untitled6/src/node_base.dart';
-import 'package:untitled6/src/node_list_view.dart';
+import 'package:flutter_nodelistview/flutter_nodelistview.dart';
 import 'dart:math';
 
 void main() {

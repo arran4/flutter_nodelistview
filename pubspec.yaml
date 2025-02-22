@@ -1,5 +1,6 @@
-name: node_list_view
+name: flutter_nodelistview
 description: "A flutter widget which uses an infinite list of double linked nodes to display a list of items."
+homepage: https://github.com/arran4/flutter_nodelistview
 
 version: 1.0.0+1
 
