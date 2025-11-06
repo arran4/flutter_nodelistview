@@ -182,7 +182,6 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
   NodeListViewController<T>? _controller;
   List<NodePositionWrapper<T>>? _positions;
   BoxConstraints? _constraints;
-  bool mutated = false;
 
   T? get _selectedNode {
     if (selectedNode == null) return null;
@@ -229,15 +228,14 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
           }
           if (_constraints == null || _constraints != constraints) {
             _constraints = constraints;
-            _positions = null;
-          }
-          if (_positions == null || mutated) {
-            updatePositions(stateUpdate: true);
-            mutated = false;
+            scheduleUpdate();
           }
           return Scrollbar(
             controller: _scrollController,
             interactive: true,
+            thickness: 16.0,
+            thumbVisibility: true,
+            trackVisibility: true,
             child: Scrollable(
               scrollBehavior: ScrollBehavior(),
               controller: _scrollController,
@@ -248,10 +246,19 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
                   );
                 }
                 position.applyViewportDimension(constraints.maxHeight);
-                // TODO calculate min and max scroll extent when we know where the ends are for a better experience.
-                position.applyContentDimensions(
-                    constraints.maxHeight * -5,
-                    constraints.maxHeight * 5);
+                double minScrollExtent = 0;
+                double maxScrollExtent = 0;
+                if (_positions!.first.node.previous() == null) {
+                  minScrollExtent = _positions!.first.top!;
+                } else {
+                  minScrollExtent = double.negativeInfinity;
+                }
+                if (_positions!.last.node.next() == null) {
+                  maxScrollExtent = _positions!.last.bottom!;
+                } else {
+                  maxScrollExtent = double.infinity;
+                }
+                position.applyContentDimensions(minScrollExtent, maxScrollExtent);
                 return Stack(
                   fit: StackFit.expand,
                   children: (_positions ?? []).map((e) {
@@ -264,11 +271,7 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
                       child: NodeSizeChangedMonitor(
                         node: e.node,
                         updated: () {
-                          WidgetsBinding.instance!.addPostFrameCallback((_) {
-                            setState(() {
-                              mutated = true;
-                            });
-                          });
+                          scheduleUpdate();
                         },
                         child: widget.itemBuilder(context, e.node,
                             selected: e.node == _visibleNodes[selectedNode!]), // Ensure it doesn't get reused incorrectly
@@ -394,19 +397,30 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
       selectedOffset = (selectedOffset ?? 0) - _scrollController.offset;
     });
     _scrollController.jumpTo(0);
-    updatePositions();
+    scheduleUpdate();
   }
 
   List<NodePositionWrapper<T>>? _previousPositions;
+  bool _updateScheduled = false;
 
-  void updatePositions({bool stateUpdate = false}) {
+  void scheduleUpdate() {
+    if (_updateScheduled) return;
+    _updateScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_constraints != null) {
-        _positions = calculatePositions(_constraints!);
-        if (stateUpdate) {
-          setState(() {});
-        }
-        if (_previousPositions != null && _controller?._onNodeVisibilityChange.isNotEmpty == true) {
+      _updateScheduled = false;
+      if (!mounted) return;
+      updatePositions();
+      setState(() {});
+    });
+  }
+
+  void updatePositions() {
+    if (_constraints != null) {
+      if (_positions == null) {
+        setState(() {});
+      }
+      _positions = calculatePositions(_constraints!);
+      if (_previousPositions != null && _controller?._onNodeVisibilityChange.isNotEmpty == true) {
           Map<T, NodePositionWrapper<T>> w = { for (var e in _previousPositions??[]) e.node : e };
           for (NodePositionWrapper<T> newNode in _positions??[]) {
             if (w.containsKey(newNode.node)) {
@@ -507,7 +521,7 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
       }
       _positions = null;
     });
-    updatePositions(stateUpdate: true);
+    scheduleUpdate();
   }
 
   void _changeSelectedNodeToAnotherOneNotInPositionsButVisible(int visiblePos, BoxConstraints? constraints, {double? offset, ScrollModes scrollMode = ScrollModes.none}) {
@@ -534,7 +548,7 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
           break;
       }
     });
-    updatePositions(stateUpdate: true);
+    scheduleUpdate();
   }
 
   void _refreshNodePointers(T node, { bool verifyNext = true, bool verifyPrevious = true, bool recurse = false }) {
