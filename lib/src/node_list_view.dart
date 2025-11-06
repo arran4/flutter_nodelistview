@@ -419,6 +419,7 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
       if (_positions == null) {
         setState(() {});
       }
+      // var _currentSelected = _selectedPosition;
       _positions = calculatePositions(_constraints!);
       if (_previousPositions != null && _controller?._onNodeVisibilityChange.isNotEmpty == true) {
           Map<T, NodePositionWrapper<T>> w = { for (var e in _previousPositions??[]) e.node : e };
@@ -435,6 +436,10 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
             _controller?._notifyOnNodeVisibilityChangeListeners(node, NodeVisibility(false, 0));
           }
         }
+        // TODO figure out what this change was
+        // if (_selectedPosition?.node != _selectedPosition?.node && selectedNode != null && selectedOffset != null asd sadf sadf) {
+          //_controller?._notifyOnSelectedNodeChangedListeners(_selectedPosition!.node, Position(selectedNode!, selectedOffset ?? 0));
+        // }
         _previousPositions = _positions;
       }
     });
