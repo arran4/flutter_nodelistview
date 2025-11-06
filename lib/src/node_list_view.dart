@@ -402,6 +402,7 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
   void updatePositions({bool stateUpdate = false}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_constraints != null) {
+        // var _currentSelected = _selectedPosition;
         _positions = calculatePositions(_constraints!);
         if (stateUpdate) {
           setState(() {});
@@ -421,6 +422,10 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
             _controller?._notifyOnNodeVisibilityChangeListeners(node, NodeVisibility(false, 0));
           }
         }
+        // TODO figure out what this change was
+        // if (_selectedPosition?.node != _selectedPosition?.node && selectedNode != null && selectedOffset != null asd sadf sadf) {
+          _controller?._notifyOnSelectedNodeChangedListeners(_selectedPosition!.node, Position(selectedNode!, selectedOffset ?? 0));
+        // }
         _previousPositions = _positions;
       }
     });
