@@ -155,11 +155,13 @@ class NodeListView<T extends NodeBase> extends StatefulWidget {
   final double fallbackSize;
   final SelectedNodeTracker? selectedNodeTracker;
   final NodeListViewController<T>? controller;
+  final WidgetBuilder? loadingBuilder;
 
   const NodeListView({
     super.key,
     required this.startNode,
     required this.itemBuilder,
+    this.loadingBuilder,
     this.selectedNodeTracker,
     this.controller,
     this.fallbackSize = 100.0,
@@ -182,7 +184,6 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
   NodeListViewController<T>? _controller;
   List<NodePositionWrapper<T>>? _positions;
   BoxConstraints? _constraints;
-  bool mutated = false;
 
   T? get _selectedNode {
     if (selectedNode == null) return null;
@@ -229,53 +230,71 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
           }
           if (_constraints == null || _constraints != constraints) {
             _constraints = constraints;
-            _positions = null;
-          }
-          if (_positions == null || mutated) {
-            updatePositions(stateUpdate: true);
-            mutated = false;
+            scheduleUpdate();
           }
           return Scrollbar(
             controller: _scrollController,
             interactive: true,
+            thickness: 16.0,
+            thumbVisibility: true,
+            trackVisibility: true,
             child: Scrollable(
               scrollBehavior: ScrollBehavior(),
               controller: _scrollController,
               viewportBuilder: (context, position) {
                 if (_positions == null) {
-                  return Center(
-                    child: Text("Loading..."),
-                  );
+                  if (widget.loadingBuilder != null) {
+                    return widget.loadingBuilder!(context);
+                  } else {
+                    return Center(
+                      child: Text("Loading..."),
+                    );
+                  }
                 }
                 position.applyViewportDimension(constraints.maxHeight);
-                // TODO calculate min and max scroll extent when we know where the ends are for a better experience.
-                position.applyContentDimensions(
-                    constraints.maxHeight * -5,
-                    constraints.maxHeight * 5);
-                return Stack(
-                  fit: StackFit.expand,
-                  children: (_positions ?? []).map((e) {
-                    return Positioned(
-                      top: e.top,
-                      bottom: e.bottom,
-                      left: 0,
-                      key: e.node.key,
-                      right: constraints.minWidth,
-                      child: NodeSizeChangedMonitor(
-                        node: e.node,
-                        updated: () {
-                          WidgetsBinding.instance!.addPostFrameCallback((_) {
-                            setState(() {
-                              mutated = true;
-                            });
-                          });
-                        },
-                        child: widget.itemBuilder(context, e.node,
-                            selected: e.node == _visibleNodes[selectedNode!]), // Ensure it doesn't get reused incorrectly
-                      ),
+                double minScrollExtent = 0;
+                double maxScrollExtent = 0;
+                if (_positions!.first.node.previous() == null) {
+                  minScrollExtent = _positions!.first.top!;
+                } else {
+                  minScrollExtent = double.negativeInfinity;
+                }
+                if (_positions!.last.node.next() == null) {
+                  maxScrollExtent = _positions!.last.bottom!;
+                } else {
+                  maxScrollExtent = double.infinity;
+                }
+                position.applyContentDimensions(minScrollExtent, maxScrollExtent);
+                if (_positions!.where((e) => e.covered! > 0).isNotEmpty) {
+                  return Stack(
+                    fit: StackFit.expand,
+                    children: (_positions ?? []).map((e) {
+                      return Positioned(
+                        top: e.top,
+                        bottom: e.bottom,
+                        left: 0,
+                        key: e.node.key,
+                        right: constraints.minWidth,
+                        child: NodeSizeChangedMonitor(
+                          node: e.node,
+                          updated: () {
+                            scheduleUpdate();
+                          },
+                          child: widget.itemBuilder(context, e.node,
+                              selected: e.node == _visibleNodes[selectedNode!]), // Ensure it doesn't get reused incorrectly
+                        ),
+                      );
+                    }).toList(),
+                  );
+                } else {
+                  if (widget.loadingBuilder != null) {
+                    return widget.loadingBuilder!(context);
+                  } else {
+                    return Center(
+                      child: Text("Loading..."),
                     );
-                  }).toList(),
-                );
+                  }
+                }
               },
             ),
           );
