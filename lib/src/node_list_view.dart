@@ -79,14 +79,14 @@ class NodeListViewController<T extends NodeBase> {
     if (_nodeListViewState == null) return;
     _nodeListViewState!._refreshNodePointers(
         node, verifyNext: verifyNext, verifyPrevious: verifyPrevious);
-    _nodeListViewState!.updatePositions(stateUpdate: true);
+    _nodeListViewState!.scheduleUpdate(immediate: true);
   }
 
   void refreshAllNodePointers() {
     if (_nodeListViewState?._selectedNode == null) return;
     _nodeListViewState!._refreshNodePointers(
         _nodeListViewState!._selectedNode!, recurse: true);
-    _nodeListViewState!.updatePositions(stateUpdate: true);
+    _nodeListViewState!.scheduleUpdate(immediate: true);
   }
 
   Function? _addListener<L>(List<L> listeners, L listener) {
@@ -413,19 +413,38 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
       selectedOffset = (selectedOffset ?? 0) - _scrollController.offset;
     });
     _scrollController.jumpTo(0);
-    updatePositions();
+    scheduleUpdate();
   }
 
   List<NodePositionWrapper<T>>? _previousPositions;
+  bool _updateScheduled = false;
 
-  void updatePositions({bool stateUpdate = false}) {
+  void scheduleUpdate({ immediate = false }) {
+    if (_updateScheduled) return;
+    _updateScheduled = true;
+    if (immediate) {
+      _updateScheduled = false;
+      updatePositions(immediate: true);
+      return;
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_constraints != null) {
-        _positions = calculatePositions(_constraints!);
-        if (stateUpdate) {
-          setState(() {});
-        }
-        if (_previousPositions != null && _controller?._onNodeVisibilityChange.isNotEmpty == true) {
+      _updateScheduled = false;
+      if (!mounted) return;
+      updatePositions();
+      setState(() {});
+    });
+  }
+
+  void updatePositions({ bool immediate = false }) {
+    if (_constraints != null) {
+      if (_positions == null) {
+        setState(() {});
+      }
+      _positions = calculatePositions(_constraints!);
+      if (immediate) {
+        setState(() {});
+      }
+      if (_previousPositions != null && _controller?._onNodeVisibilityChange.isNotEmpty == true) {
           Map<T, NodePositionWrapper<T>> w = { for (var e in _previousPositions??[]) e.node : e };
           for (NodePositionWrapper<T> newNode in _positions??[]) {
             if (w.containsKey(newNode.node)) {
@@ -526,7 +545,7 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
       }
       _positions = null;
     });
-    updatePositions(stateUpdate: true);
+    scheduleUpdate();
   }
 
   void _changeSelectedNodeToAnotherOneNotInPositionsButVisible(int visiblePos, BoxConstraints? constraints, {double? offset, ScrollModes scrollMode = ScrollModes.none}) {
@@ -553,7 +572,7 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
           break;
       }
     });
-    updatePositions(stateUpdate: true);
+    scheduleUpdate();
   }
 
   void _refreshNodePointers(T node, { bool verifyNext = true, bool verifyPrevious = true, bool recurse = false }) {
