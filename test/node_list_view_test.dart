@@ -107,4 +107,59 @@ void main() {
     await tester.pumpAndSettle();
     expect(notificationCount, 0);
   });
+  testWidgets('NodeListView programmatic navigation notifications', (WidgetTester tester) async {
+    final startNode = createList(10);
+    final controller = NodeListViewController<TestNode>();
+    int notificationCount = 0;
+    TestNode? lastNode;
+    Position? lastPosition;
+
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: NodeListView<TestNode>(
+          startNode: startNode,
+          controller: controller,
+          itemBuilder: (context, node, {bool selected = false}) {
+            return SizedBox(
+              height: 200,
+              child: Text('Node ${node.id}'),
+            );
+          },
+        ),
+      ),
+    ));
+
+    await tester.pumpAndSettle();
+
+    controller.addOnSelectedNodeChangedListener((node, pos) {
+      notificationCount++;
+      lastNode = node;
+      lastPosition = pos;
+    });
+
+    // Node 0, 1, 2 are currently visible (default height 600)
+    // 1. Programmatic jumpTo to an already visible node (e.g. Node 1)
+    controller.selectNext(scrollMode: ScrollModes.none);
+    await tester.pumpAndSettle();
+
+    expect(notificationCount, 1, reason: 'Should notify exactly once on genuine selection change');
+    expect(lastNode?.id, 1);
+    expect(lastPosition?.position, 1);
+
+    notificationCount = 0;
+
+    // 2. Repeated positioning (no-op) should not duplicate notifications
+    controller.jumpTo(startNode.next()!, scrollMode: ScrollModes.none);
+    await tester.pumpAndSettle();
+
+    expect(notificationCount, 0, reason: 'Should not duplicate notification for unchanged state');
+
+    // 3. Jump to a new node that is not in _positions
+    // But since it's an infinite list we might have to jump far?
+    // Let's jump to startNode (Node 0)
+    controller.jumpTo(startNode, scrollMode: ScrollModes.none);
+    await tester.pumpAndSettle();
+    expect(notificationCount, 1);
+    expect(lastNode?.id, 0);
+  });
 }
