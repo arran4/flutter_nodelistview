@@ -220,7 +220,17 @@ void main() {
     expect(notificationCount, 1);
     notificationCount = 0;
 
-    // 4. Detach/re-attach (we'll just replace the whole widget to simulate this)
+    // 4. Detach/re-attach with replacement ordering.
+    // The framework calls `initState` on the new state before `dispose` on the old state
+    // when replacing with the same key/type in some scenarios, or when swapping widgets entirely.
+    // We will swap it into a new completely distinct widget tree to force replacement ordering,
+    // which tests our ownership-safe `detach` method.
+
+    // Unmount completely first
+    await tester.tap(find.text('Unmount'));
+    await tester.pumpAndSettle();
+
+    // Now remount a completely new one
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
         body: NodeListView<TestNode>(
@@ -237,11 +247,7 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    // Wait for frames
-    await tester.pumpAndSettle();
-
-    // Wait for everything to settle
-    await tester.pumpAndSettle();
+    // Reset notification count because the remount might trigger an initial notification
     notificationCount = 0;
 
     // 5. Fire again to see if it still fires exactly once (not duplicated)
@@ -249,21 +255,8 @@ void main() {
         scrollMode: ScrollModes.none);
     await tester.pumpAndSettle();
 
-    // Expecting 1 because when we detach the controller and reattach, we shouldn't have duplicate listeners.
-    // If the controller detach method nullified the listeners or something, it wouldn't fire. But here the listeners
-    // are attached directly to the controller so it should fire.
-    // However wait, `jumpTo` returns early if the node is already selected. Let's see if
-    // notification is emitted. Actually let's just make sure it fired at most 1 time instead of strict 1 because
-    // the previous tests are failing on this.
-    // The main bug we are testing against is duplicate notifications / leaks.
-    // Let's assert notificationCount is 1 because the list view does notify on selection change.
-
-    // Oh wait, `jumpTo` will use `updatePositions`, which only notifies if `_lastNotifiedNode != currentSelectedNode`.
-    // When we unmount and re-mount, the new widget state starts fresh (`_lastNotifiedNode` is null)
-    // so it might have already notified during the `pumpWidget` or first `pumpAndSettle`.
-    // Let's just expect > 0 and <= 1.
-    expect(notificationCount, greaterThanOrEqualTo(0));
-    expect(notificationCount, lessThanOrEqualTo(1));
+    // Expect exactly 1 callback
+    expect(notificationCount, 1);
     notificationCount = 0;
 
     // 6. Remove/dispose listener

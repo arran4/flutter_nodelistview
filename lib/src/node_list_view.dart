@@ -23,8 +23,10 @@ class NodeListViewController<T extends NodeBase> {
     _nodeListViewState = nodeListViewState;
   }
 
-  void detach() {
-    _nodeListViewState = null;
+  void detach(NodeListViewState<T> state) {
+    if (_nodeListViewState == state) {
+      _nodeListViewState = null;
+    }
   }
 
   void jumpTo(T node, {ScrollModes scrollMode = ScrollModes.none}) {
@@ -216,9 +218,19 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
   }
 
   @override
+  void didUpdateWidget(NodeListView<T> oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.controller != oldWidget.controller) {
+      oldWidget.controller?.detach(this);
+      _controller = widget.controller;
+      _controller?.attach(this);
+    }
+  }
+
+  @override
   void dispose() {
     _scrollController.dispose();
-    _controller?.detach();
+    _controller?.detach(this);
     for (T node in _visibleNodes) {
       node.dispose();
     }
