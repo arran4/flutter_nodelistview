@@ -275,6 +275,37 @@ void main() {
     tempDisposer(); // Works safely without exception
   });
 
+  testWidgets('NodeListViewController manual detach clears state safely',
+      (WidgetTester tester) async {
+    final startNode = createList(10);
+    final controller = NodeListViewController<TestNode>();
+
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: NodeListView<TestNode>(
+          startNode: startNode,
+          controller: controller,
+          itemBuilder: (context, node, {bool selected = false}) {
+            return SizedBox(
+              height: 200,
+              child: Text('Node ${node.id}'),
+            );
+          },
+        ),
+      ),
+    ));
+
+    await tester.pumpAndSettle();
+
+    // Call public detach API
+    controller.detach();
+
+    // Jump should safely no-op (no exceptions thrown from null state or otherwise)
+    controller.jumpTo(startNode.next()!);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('NodeListView programmatic navigation notifications',
       (WidgetTester tester) async {
     final startNode = createList(10);
