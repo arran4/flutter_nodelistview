@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_nodelistview/flutter_nodelistview.dart';
 
-
 class TestNode extends NodeBase {
   final int id;
   TestNode? _next;
@@ -107,7 +106,208 @@ void main() {
     await tester.pumpAndSettle();
     expect(notificationCount, 0);
   });
-  testWidgets('NodeListView programmatic navigation notifications', (WidgetTester tester) async {
+  testWidgets(
+      'NodeListView post-frame state update safely ignores unmounted widget',
+      (WidgetTester tester) async {
+    final startNode = createList(3);
+
+    // We create a StatefulWidget to swap the NodeListView out.
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: StatefulBuilder(builder: (context, setState) {
+          return Column(
+            children: [
+              ElevatedButton(
+                onPressed: () {
+                  setState(() {
+                    // Trigger rebuild with an empty view
+                  });
+                },
+                child: const Text('Unmount'),
+              ),
+              Expanded(
+                child: NodeListView<TestNode>(
+                  startNode: startNode,
+                  itemBuilder: (context, node, {bool selected = false}) {
+                    return SizedBox(
+                      height: 200,
+                      child: Text('Node ${node.id}'),
+                    );
+                  },
+                ),
+              ),
+            ],
+          );
+        }),
+      ),
+    ));
+
+    await tester.pumpAndSettle();
+
+    // Trigger size update callback manually by finding the Monitor widget
+    final monitorFinder = find.byType(NodeSizeChangedMonitor<TestNode>).first;
+    expect(monitorFinder, findsOneWidget);
+
+    final monitor =
+        tester.widget<NodeSizeChangedMonitor<TestNode>>(monitorFinder);
+    monitor.updated();
+
+    // Unmount before the post-frame callback fires!
+    await tester.tap(find.text('Unmount'));
+    // Pump a frame to let the setState from 'Unmount' process
+    // This will unmount the NodeListView, and execute the postFrame callback
+    // that monitor.updated() queued up.
+    await tester.pumpWidget(const SizedBox());
+
+    // Check no exception is thrown
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('NodeListViewController listener registration lifecycle',
+      (WidgetTester tester) async {
+    final startNode = createList(10);
+    final controller = NodeListViewController<TestNode>();
+    int notificationCount = 0;
+
+    // 1. Register listener before widget attachment
+    // (should succeed and return non-null disposer)
+    final disposer = controller.addOnSelectedNodeChangedListener((node, pos) {
+      notificationCount++;
+    });
+
+    // We create a StatefulWidget to swap the NodeListView out to test attach/detach.
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: StatefulBuilder(builder: (context, setState) {
+          return Column(
+            children: [
+              ElevatedButton(
+                onPressed: () {
+                  setState(() {});
+                },
+                child: const Text('Unmount'),
+              ),
+              Expanded(
+                child: NodeListView<TestNode>(
+                  startNode: startNode,
+                  controller: controller,
+                  itemBuilder: (context, node, {bool selected = false}) {
+                    return SizedBox(
+                      height: 200,
+                      child: Text('Node ${node.id}'),
+                    );
+                  },
+                ),
+              ),
+            ],
+          );
+        }),
+      ),
+    ));
+
+    // 2. Attach widget
+    await tester.pumpAndSettle();
+
+    // Initial attach should trigger one notification
+    expect(notificationCount, 1);
+    notificationCount = 0;
+
+    // Trigger scroll to test if listener fires
+    controller.selectNext(scrollMode: ScrollModes.none);
+    await tester.pumpAndSettle();
+
+    // 3. Listener remains active and fires
+    expect(notificationCount, 1);
+    notificationCount = 0;
+
+    // 4. Detach/re-attach with replacement ordering.
+    // The framework calls `initState` on the new state before `dispose` on the old state
+    // when replacing with the same key/type in some scenarios, or when swapping widgets entirely.
+    // We will swap it into a new completely distinct widget tree to force replacement ordering,
+    // which tests our ownership-safe `detach` method.
+
+    // Unmount completely first
+    await tester.tap(find.text('Unmount'));
+    await tester.pumpAndSettle();
+
+    // Now remount a completely new one
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: NodeListView<TestNode>(
+          startNode: startNode,
+          controller: controller, // reuse same controller
+          itemBuilder: (context, node, {bool selected = false}) {
+            return SizedBox(
+              height: 200,
+              child: Text('Node ${node.id}'),
+            );
+          },
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    // Reset notification count because the remount might trigger an initial notification
+    notificationCount = 0;
+
+    // 5. Fire again to see if it still fires exactly once (not duplicated)
+    controller.jumpTo(startNode.next()!.next()!.next()!,
+        scrollMode: ScrollModes.none);
+    await tester.pumpAndSettle();
+
+    // Expect exactly 1 callback
+    expect(notificationCount, 1);
+    notificationCount = 0;
+
+    // 6. Remove/dispose listener
+    disposer();
+
+    // 7. Later notifications no longer invoke it
+    controller.selectNext(scrollMode: ScrollModes.none);
+    await tester.pumpAndSettle();
+    expect(notificationCount, 0);
+
+    // 8. Registering/removing while detached works safely
+    // (already detached before first test pumpWidget, but we can do it again)
+    final tempController = NodeListViewController<TestNode>();
+    final tempDisposer =
+        tempController.addOnSelectedNodeChangedListener((node, pos) {});
+    tempDisposer(); // Works safely without exception
+  });
+
+  testWidgets('NodeListViewController manual detach clears state safely',
+      (WidgetTester tester) async {
+    final startNode = createList(10);
+    final controller = NodeListViewController<TestNode>();
+
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: NodeListView<TestNode>(
+          startNode: startNode,
+          controller: controller,
+          itemBuilder: (context, node, {bool selected = false}) {
+            return SizedBox(
+              height: 200,
+              child: Text('Node ${node.id}'),
+            );
+          },
+        ),
+      ),
+    ));
+
+    await tester.pumpAndSettle();
+
+    // Call public detach API
+    controller.detach();
+
+    // Jump should safely no-op (no exceptions thrown from null state or otherwise)
+    controller.jumpTo(startNode.next()!);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('NodeListView programmatic navigation notifications',
+      (WidgetTester tester) async {
     final startNode = createList(10);
     final controller = NodeListViewController<TestNode>();
     int notificationCount = 0;
@@ -142,7 +342,8 @@ void main() {
     controller.selectNext(scrollMode: ScrollModes.none);
     await tester.pumpAndSettle();
 
-    expect(notificationCount, 1, reason: 'Should notify exactly once on genuine selection change');
+    expect(notificationCount, 1,
+        reason: 'Should notify exactly once on genuine selection change');
     expect(lastNode?.id, 1);
     expect(lastPosition?.position, 1);
 
@@ -152,7 +353,8 @@ void main() {
     controller.jumpTo(startNode.next()!, scrollMode: ScrollModes.none);
     await tester.pumpAndSettle();
 
-    expect(notificationCount, 0, reason: 'Should not duplicate notification for unchanged state');
+    expect(notificationCount, 0,
+        reason: 'Should not duplicate notification for unchanged state');
 
     // 3. Jump to a new node that is not in _positions
     // But since it's an infinite list we might have to jump far?
