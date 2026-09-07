@@ -31,17 +31,16 @@ class NodeListViewController<T extends NodeBase> {
         T>? positionWrapper, int visiblePos })? index = _nodeListViewState!
         .findNode(node);
     if (index?.positionPos != null && index?.positionWrapper != null) {
-      _nodeListViewState!._changeSelectedNodeToAnotherOneInPositions(
-          index!.positionPos!, index.visiblePos, index.positionWrapper!, null);
+      _nodeListViewState!._changeSelectedNodeToAnotherOneInPositions(index!.positionPos!, index.visiblePos, index.positionWrapper!, null, scrollMode: scrollMode);
+      _nodeListViewState!.updatePositions();
       return;
     }
     if (index?.visiblePos != null) {
       _nodeListViewState!
-          ._changeSelectedNodeToAnotherOneNotInPositionsButVisible(
-          index!.visiblePos, null, scrollMode: ScrollModes.none);
+          ._changeSelectedNodeToAnotherOneNotInPositionsButVisible(index!.visiblePos, null, scrollMode: scrollMode);
       return;
     }
-    _nodeListViewState!._resetSelectedNodeToNewNode(node);
+    _nodeListViewState!._resetSelectedNodeToNewNode(node, scrollMode: scrollMode);
   }
 
   void selectNext({ScrollModes scrollMode = ScrollModes.none}) {
@@ -119,7 +118,7 @@ class NodeListViewController<T extends NodeBase> {
       _addListener(_onBufferUnloadedNodeChanged, listener);
   void _notifyOnBufferUnloadedNodeChangedListeners(List<T> nodes, Location location) =>
       _notifyListeners(_onBufferUnloadedNodeChanged, nodes, location);
-  
+
   final _onNodeVisibilityChange = <Function(T, NodeVisibility)>[];
   Function? addOnNodeVisibilityChangeListener(Function(T, NodeVisibility) listener) =>
       _addListener(_onNodeVisibilityChange, listener);
@@ -183,6 +182,9 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
   List<NodePositionWrapper<T>>? _positions;
   BoxConstraints? _constraints;
   bool mutated = false;
+
+  T? _lastNotifiedNode;
+  double? _lastNotifiedOffset;
 
   T? get _selectedNode {
     if (selectedNode == null) return null;
@@ -401,6 +403,7 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
 
   void updatePositions({bool stateUpdate = false}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       if (_constraints != null) {
         // var _currentSelected = _selectedPosition;
         _positions = calculatePositions(_constraints!);
@@ -422,10 +425,14 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
             _controller?._notifyOnNodeVisibilityChangeListeners(node, NodeVisibility(false, 0));
           }
         }
-        // TODO figure out what this change was
-        // if (_selectedPosition?.node != _selectedPosition?.node && selectedNode != null && selectedOffset != null asd sadf sadf) {
-          //_controller?._notifyOnSelectedNodeChangedListeners(_selectedPosition!.node, Position(selectedNode!, selectedOffset ?? 0));
-        // }
+        var currentSelectedNode = _selectedNode;
+        var currentSelectedOffset = selectedOffset;
+        if (currentSelectedNode != null && (currentSelectedNode != _lastNotifiedNode || currentSelectedOffset != _lastNotifiedOffset)) {
+          _lastNotifiedNode = currentSelectedNode;
+          _lastNotifiedOffset = currentSelectedOffset;
+          _controller?._notifyOnSelectedNodeChangedListeners(currentSelectedNode, Position(selectedNode ?? 0, currentSelectedOffset ?? 0));
+        }
+
         _previousPositions = _positions;
       }
     });
