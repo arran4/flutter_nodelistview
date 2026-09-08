@@ -44,7 +44,7 @@ class NodeListViewController<T extends NodeBase> {
       _nodeListViewState!._changeSelectedNodeToAnotherOneInPositions(
           index!.positionPos!, index.visiblePos, index.positionWrapper!, null,
           scrollMode: scrollMode);
-      _nodeListViewState!.updatePositions(stateUpdate: true);
+      _nodeListViewState!.updatePositions();
       return;
     }
     if (index?.visiblePos != null) {
