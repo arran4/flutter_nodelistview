@@ -44,7 +44,7 @@ class NodeListViewController<T extends NodeBase> {
       _nodeListViewState!._changeSelectedNodeToAnotherOneInPositions(
           index!.positionPos!, index.visiblePos, index.positionWrapper!, null,
           scrollMode: scrollMode);
-      _nodeListViewState!.updatePositions();
+      _nodeListViewState!.updatePositions(stateUpdate: true);
       return;
     }
     if (index?.visiblePos != null) {
@@ -400,7 +400,7 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
           newSelectedNode.visiblePos,
           result[newSelectedNode.resultPos],
           constraints,
-          scrollMode: ScrollModes.fitNode);
+          scrollMode: ScrollModes.none);
     }
     balanceBuffers();
     return result;
@@ -431,13 +431,25 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
           selectedOffset = offset;
           break;
         case ScrollModes.none:
-          break;
-        case ScrollModes.fitNode:
           if (node.top != null) {
             selectedOffset = (node.top! + node.height / 2) - cons.maxHeight / 2;
           } else if (node.bottom != null) {
+            double absoluteTop = cons.maxHeight - node.bottom! - node.height;
             selectedOffset =
-                cons.maxHeight / 2 - (node.bottom! - node.height / 2);
+                (absoluteTop + node.height / 2) - cons.maxHeight / 2;
+          }
+          break;
+        case ScrollModes.fitNode:
+          double nodeTop =
+              node.top ?? (cons.maxHeight - node.bottom! - node.height);
+          double nodeBottom = nodeTop + node.height;
+          if (nodeTop < 0) {
+            selectedOffset = (node.height / 2) - (cons.maxHeight / 2);
+          } else if (nodeBottom > cons.maxHeight) {
+            selectedOffset =
+                (cons.maxHeight - (node.height / 2)) - (cons.maxHeight / 2);
+          } else {
+            selectedOffset = (nodeTop + node.height / 2) - (cons.maxHeight / 2);
           }
           break;
         case ScrollModes.reset:
@@ -582,6 +594,7 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
           selectedOffset = offset;
           break;
         case ScrollModes.fitNode:
+          selectedOffset = null;
           break;
         case ScrollModes.none:
           break;
@@ -606,12 +619,7 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
           selectedOffset = offset;
           break;
         case ScrollModes.fitNode:
-          // TODO this might have been forgotten
-          // if (node.top != null) {
-          //   selectedOffset = (node.top! + node.height / 2) - cons.maxHeight / 2;
-          // } else if (node.bottom != null) {
-          //   selectedOffset = cons.maxHeight / 2 - (node.bottom! - node.height / 2);
-          // }
+          selectedOffset = null;
           break;
         case ScrollModes.none:
           break;
