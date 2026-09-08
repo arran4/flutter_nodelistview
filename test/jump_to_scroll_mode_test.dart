@@ -113,8 +113,40 @@ void main() {
         reason: 'Notification should be triggered once more for new jump');
     expect(notifiedNode, nodes[18], reason: 'Notified node should be 18');
     // For a brand new node jumping with fitNode, selectedOffset is null, which evaluates to 0.0 in the callback:
-    // Position(selectedNode ?? 0, currentSelectedOffset ?? 0)
     expect(notifiedPos?.offset, 0.0,
         reason: 'Reset to center should yield 0.0 offset in callback');
+
+    final state = tester
+        .state<NodeListViewState<MyNode>>(find.byType(NodeListView<MyNode>));
+
+    // 7. Regression test for jumpTo an above node with top=null, bottom!=null
+    controller.jumpTo(nodes[15], scrollMode: ScrollModes.reset);
+    await tester.pumpAndSettle();
+
+    nodes[14].size = null; // Unmeasured
+    state.updatePositions(stateUpdate: true);
+    await tester.pump();
+
+    controller.jumpTo(nodes[14], scrollMode: ScrollModes.none);
+    await tester.pumpAndSettle();
+
+    final pos14_after_none = tester.getTopLeft(find.text('Node 14'));
+    expect(pos14_after_none.dy, 200.0,
+        reason: 'none preserves the absolute center');
+
+    controller.jumpTo(nodes[15], scrollMode: ScrollModes.reset);
+    await tester.pumpAndSettle();
+
+    nodes[14].size = null;
+    state.updatePositions(stateUpdate: true);
+    await tester.pump();
+
+    controller.jumpTo(nodes[14], scrollMode: ScrollModes.fitNode);
+    await tester.pumpAndSettle();
+
+    final pos14_after_fit2 = tester.getTopLeft(find.text('Node 14'));
+    // Since it's fully visible (175 to 275 before layout, 200 to 250 after layout), fitNode should just act like none.
+    expect(pos14_after_fit2.dy, 175.0,
+        reason: 'fitNode handles bottom-only coordinate correctly');
   });
 }

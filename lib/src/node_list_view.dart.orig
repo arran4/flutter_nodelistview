@@ -434,15 +434,13 @@ class NodeListViewState<T extends NodeBase> extends State<NodeListView<T>> {
           if (node.top != null) {
             selectedOffset = (node.top! + node.height / 2) - cons.maxHeight / 2;
           } else if (node.bottom != null) {
-            double absoluteTop = cons.maxHeight - node.bottom! - node.height;
             selectedOffset =
-                (absoluteTop + node.height / 2) - cons.maxHeight / 2;
+                (node.bottom! - node.height / 2) - cons.maxHeight / 2;
           }
           break;
         case ScrollModes.fitNode:
-          double nodeTop =
-              node.top ?? (cons.maxHeight - node.bottom! - node.height);
-          double nodeBottom = nodeTop + node.height;
+          double nodeTop = node.top ?? (node.bottom! - node.height);
+          double nodeBottom = node.bottom ?? (node.top! + node.height);
           if (nodeTop < 0) {
             selectedOffset = (node.height / 2) - (cons.maxHeight / 2);
           } else if (nodeBottom > cons.maxHeight) {
